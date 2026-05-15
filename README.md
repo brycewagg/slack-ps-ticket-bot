@@ -26,43 +26,38 @@ A "File PI Ticket" entry in the ⚡ shortcuts menu next to the Slack composer op
 
 - Title (required)
 - Description (required)
-- PI Issue Type (Performance / Pacing, required)
+- PI Issue Type (multi-select: Performance / Pacing, required)
 - Advertiser (required)
 - Agency
 - AID Affected
 - Campaign Group ID (cgid)
-- Monthly Budget (PEM fills if flagging)
+- Revenue Impact / Monthly Budget (PEM fills if flagging)
 - Projected Underspend (Tof/Johnny fill if flagging)
-- PMO Rep (default: Trixy)
+- PMO Rep (constrained dropdown, defaults to Trixy Tran)
 
 Assignee is left blank — manual routing for now.
 
 ## One-time setup
 
-1. **Discover Jira custom field IDs** for the PI form:
-   ```bash
-   export JIRA_BASE_URL=https://mntn.atlassian.net
-   export JIRA_EMAIL=svc-ps-bot@mountain.com
-   export JIRA_API_TOKEN=...
-   ./scripts/list-fields.sh
-   ```
-   Copy the `customfield_XXXXX` values into `config.ts → jiraCustomFields`.
+Custom field IDs in `config.ts` are pre-filled from PS / Performance Investigation
+metadata validated on 2026-05-15. Re-run `./scripts/list-fields.sh` if a Jira admin
+changes the field config and you need to re-validate.
 
-2. **Set Slack-hosted env**:
+1. **Set Slack-hosted env**:
    ```bash
    slack env add JIRA_BASE_URL https://mntn.atlassian.net
    slack env add JIRA_EMAIL svc-ps-bot@mountain.com
    slack env add JIRA_API_TOKEN <token>
    ```
 
-3. **Add channel IDs** to `config.ts → channelIds`. The reaction and message event triggers must be scoped to specific channels at install time.
+2. **Add channel IDs** to `config.ts → channelIds`. The reaction and message event triggers must be scoped to specific channels at install time.
 
-4. **Deploy**:
+3. **Deploy**:
    ```bash
    slack deploy
    ```
 
-5. **Create triggers** (one-time per environment):
+4. **Create triggers** (one-time per environment):
    ```bash
    slack trigger create --trigger-def triggers/ack_reaction.ts
    slack trigger create --trigger-def triggers/done_reaction.ts
@@ -75,10 +70,11 @@ Assignee is left blank — manual routing for now.
 
 ## Verify before deploying
 
-- `PS` issue types include `Task` (used by `:ack:`) and `Performance Investigation` (used by the form). Update `config.ackIssueType` / `config.piIssueType` if they're named differently.
+- `Performance Investigation` issue type exists on PS (id 12823, validated 2026-05-15).
+- `Task` issue type exists on PS for the `:ack:` flow. **Note**: PS is a service desk project; default issue types are `Support`, `Production Incident`, etc. `Task` may not be present — check and update `config.ackIssueType` to one of: `Support`, `New Feature`, `Idea`.
 - The PS workflow has a transition literally named `Done`. The transitionIssue helper falls back to matching destination status name if the transition name doesn't match.
 - The service account has Create Issue, Edit Issue, Add Comment, Transition Issue, and Add Remote Link permissions on PS.
-- The custom fields listed in `config.ts → jiraCustomFields` resolve to real `customfield_XXXXX` IDs.
+- PMO Rep values in `config.pmoRepOptions` match the live Jira options. Re-run `./scripts/list-fields.sh` if Jira admins add/remove names.
 
 ## Local dev
 

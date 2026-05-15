@@ -33,16 +33,20 @@ const form = PiTicketWorkflow.addStep(Schema.slack.functions.OpenForm, {
       {
         name: "pi_type",
         title: "PI Issue Type",
-        type: Schema.types.string,
-        enum: ["Performance", "Pacing"],
+        type: Schema.types.array,
+        items: { type: Schema.types.string, enum: ["Performance", "Pacing"] },
       },
       { name: "advertiser", title: "Advertiser", type: Schema.types.string },
       { name: "agency", title: "Agency", type: Schema.types.string },
       { name: "aid_affected", title: "AID Affected", type: Schema.types.string },
-      { name: "campaign_group_id", title: "Campaign Group ID (cgid)", type: Schema.types.string },
       {
-        name: "monthly_budget",
-        title: "Monthly Budget (PEM fills if flagging)",
+        name: "campaign_group_id",
+        title: "Campaign Group ID (cgid)",
+        type: Schema.types.string,
+      },
+      {
+        name: "revenue_impact",
+        title: "Revenue Impact / Monthly Budget (PEM fills if flagging)",
         type: Schema.types.string,
       },
       {
@@ -54,6 +58,7 @@ const form = PiTicketWorkflow.addStep(Schema.slack.functions.OpenForm, {
         name: "pmo_rep",
         title: "PMO Rep",
         type: Schema.types.string,
+        enum: config.pmoRepOptions,
         default: config.defaultPmoRep,
       },
     ],
@@ -70,7 +75,7 @@ const created = PiTicketWorkflow.addStep(CreatePiTicketFunction, {
   agency: form.outputs.fields.agency,
   aid_affected: form.outputs.fields.aid_affected,
   campaign_group_id: form.outputs.fields.campaign_group_id,
-  monthly_budget: form.outputs.fields.monthly_budget,
+  revenue_impact: form.outputs.fields.revenue_impact,
   projected_underspend: form.outputs.fields.projected_underspend,
   pmo_rep: form.outputs.fields.pmo_rep,
 });

@@ -11,8 +11,8 @@ export const CreatePiTicketFunction = DefineFunction({
       submitter_id: { type: Schema.slack.types.user_id },
       summary: { type: Schema.types.string },
       description: { type: Schema.types.string },
-      pi_type: { type: Schema.types.string },
-      monthly_budget: { type: Schema.types.string },
+      pi_type: { type: Schema.types.array, items: { type: Schema.types.string } },
+      revenue_impact: { type: Schema.types.string },
       projected_underspend: { type: Schema.types.string },
       advertiser: { type: Schema.types.string },
       agency: { type: Schema.types.string },
@@ -33,6 +33,7 @@ export const CreatePiTicketFunction = DefineFunction({
 
 export default SlackFunction(CreatePiTicketFunction, async ({ inputs, env }) => {
   const cf = config.jiraCustomFields;
+
   const fields: Record<string, unknown> = {
     project: { key: config.projectKey },
     issuetype: { name: config.piIssueType },
@@ -48,22 +49,17 @@ export default SlackFunction(CreatePiTicketFunction, async ({ inputs, env }) => 
         }],
       }],
     },
-    [cf.piIssueType]: { value: inputs.pi_type },
+    // multi-select expects an array of { value }
+    [cf.piIssueType]: inputs.pi_type.map((v) => ({ value: v })),
     [cf.advertiser]: inputs.advertiser,
   };
 
   if (inputs.agency) fields[cf.agency] = inputs.agency;
   if (inputs.aid_affected) fields[cf.aidAffected] = inputs.aid_affected;
   if (inputs.campaign_group_id) fields[cf.campaignGroupId] = inputs.campaign_group_id;
-  if (inputs.pmo_rep) fields[cf.pmoRep] = inputs.pmo_rep;
-  if (inputs.monthly_budget) {
-    const n = Number(inputs.monthly_budget);
-    if (!Number.isNaN(n)) fields[cf.monthlyBudget] = n;
-  }
-  if (inputs.projected_underspend) {
-    const n = Number(inputs.projected_underspend);
-    if (!Number.isNaN(n)) fields[cf.projectedUnderspend] = n;
-  }
+  if (inputs.revenue_impact) fields[cf.revenueImpact] = inputs.revenue_impact;
+  if (inputs.projected_underspend) fields[cf.projectedUnderspend] = inputs.projected_underspend;
+  if (inputs.pmo_rep) fields[cf.pmoRep] = { value: inputs.pmo_rep };
 
   const created = await createIssueWithFields(env, fields);
   return {
