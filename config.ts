@@ -29,7 +29,7 @@ export const config = {
   // Channels where reaction + message event triggers are active.
   // Slack event triggers must be scoped to specific channels at install time.
   channelIds: [
-    // "C0XXXXXXXXX",
+    "C0B4PTZEEC8", // #test-rx
   ],
 
   // Default PMO Rep. Must match a value from pmoRepOptions exactly.
