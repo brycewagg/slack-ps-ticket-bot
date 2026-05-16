@@ -8,15 +8,15 @@ Slack-hosted app that opens, comments on, and closes Jira PS tickets via reactio
 
 | Reaction | Effect |
 |---|---|
-| `:ack:` on any message | Creates a `PS-###` ticket. If the message already contains a `PS-###` key, skips creation, attaches the Slack permalink to the existing issue as a remote link, and DMs an ephemeral note to the reactor. Records a thread → ticket mapping in the app datastore. |
-| `:done:` on any message containing a `PS-###` key | Transitions that ticket to Done. |
+| `:on_it:` on any message | Creates a `PS-###` ticket. If the message already contains a `PS-###` key, skips creation, attaches the Slack permalink to the existing issue as a remote link, and DMs an ephemeral note to the reactor. Records a thread → ticket mapping in the app datastore. |
+| `:resolved:` on any message containing a `PS-###` key | Transitions that ticket to Done. |
 | `:mute:` on any tracked thread | Pauses thread-to-Jira comment sync for that thread. |
 
-There is **no** `reaction_removed` handler. Removing `:ack:` or `:done:` does nothing — by design, so tickets aren't accidentally opened or closed.
+There is **no** `reaction_removed` handler. Removing `:on_it:` or `:resolved:` does nothing — by design, so tickets aren't accidentally opened or closed.
 
 ### Thread-to-Jira comment sync (auto)
 
-Once a thread has a ticket tracked (via `:ack:`), every subsequent reply in that thread is posted as a comment on the Jira ticket. The comment includes the replier's display name, the message text, and the Slack permalink.
+Once a thread has a ticket tracked (via `:on_it:`), every subsequent reply in that thread is posted as a comment on the Jira ticket. The comment includes the replier's display name, the message text, and the Slack permalink.
 
 Pause with `:mute:` on the thread root.
 
@@ -71,7 +71,7 @@ changes the field config and you need to re-validate.
 ## Verify before deploying
 
 - `Performance Investigation` issue type exists on PS (id 12823, validated 2026-05-15).
-- `Task` issue type exists on PS for the `:ack:` flow. **Note**: PS is a service desk project; default issue types are `Support`, `Production Incident`, etc. `Task` may not be present — check and update `config.ackIssueType` to one of: `Support`, `New Feature`, `Idea`.
+- `Task` issue type exists on PS for the `:on_it:` flow. **Note**: PS is a service desk project; default issue types are `Support`, `Production Incident`, etc. `Task` may not be present — check and update `config.ackIssueType` to one of: `Support`, `New Feature`, `Idea`.
 - The PS workflow has a transition literally named `Done`. The transitionIssue helper falls back to matching destination status name if the transition name doesn't match.
 - The service account has Create Issue, Edit Issue, Add Comment, Transition Issue, and Add Remote Link permissions on PS.
 - PMO Rep values in `config.pmoRepOptions` match the live Jira options. Re-run `./scripts/list-fields.sh` if Jira admins add/remove names.
@@ -91,8 +91,8 @@ Logs stream as reactions fire and thread replies sync.
 | `manifest.ts` | App, scopes, workflows, functions, datastore |
 | `config.ts` | Project key, emoji names, custom field IDs, watched channels |
 | `datastores/thread_ticket_map.ts` | Thread → ticket mapping, mute flag |
-| `triggers/ack_reaction.ts` | `:ack:` → open or link ticket |
-| `triggers/done_reaction.ts` | `:done:` → transition to Done |
+| `triggers/ack_reaction.ts` | `:on_it:` → open or link ticket |
+| `triggers/done_reaction.ts` | `:resolved:` → transition to Done |
 | `triggers/mute_reaction.ts` | `:mute:` → pause sync |
 | `triggers/message_event.ts` | Thread replies → Jira comments |
 | `triggers/pi_ticket_shortcut.ts` | Lightning-bolt shortcut to open the form |
@@ -107,7 +107,7 @@ Logs stream as reactions fire and thread replies sync.
 
 ## Known limitations
 
-- One ticket per message for `:ack:` and `:done:`. Multiple `PS-###` keys → only first is acted on.
-- Thread sync starts only after `:ack:`. Replies posted before the ticket is opened are not retroactively synced. (Easy to add: read `conversations.replies` on ACK and bulk-comment.)
+- One ticket per message for `:on_it:` and `:resolved:`. Multiple `PS-###` keys → only first is acted on.
+- Thread sync starts only after `:on_it:`. Replies posted before the ticket is opened are not retroactively synced. (Easy to add: read `conversations.replies` on ACK and bulk-comment.)
 - Channel-scoped event triggers only. Add channels to `config.ts` and update triggers to expand coverage.
 - Form leaves assignee blank. Auto-routing (PEM ↔ Tof) is a follow-up — needs a user mapping.

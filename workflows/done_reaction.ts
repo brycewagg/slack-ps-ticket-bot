@@ -4,7 +4,7 @@ import { HandleDoneFunction } from "../functions/handle_done.ts";
 export const DoneReactionWorkflow = DefineWorkflow({
   callback_id: "done_reaction_workflow",
   title: "DONE Reaction Workflow",
-  description: "Runs when :done: is added to a message",
+  description: "Runs when :resolved: is added to a message",
   input_parameters: {
     properties: {
       channel_id: { type: Schema.slack.types.channel_id },

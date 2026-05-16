@@ -4,7 +4,7 @@ import { HandleAckFunction } from "../functions/handle_ack.ts";
 export const AckReactionWorkflow = DefineWorkflow({
   callback_id: "ack_reaction_workflow",
   title: "ACK Reaction Workflow",
-  description: "Runs when :ack: is added to a message",
+  description: "Runs when :on_it: is added to a message",
   input_parameters: {
     properties: {
       channel_id: { type: Schema.slack.types.channel_id },

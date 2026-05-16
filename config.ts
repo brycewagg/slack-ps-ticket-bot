@@ -6,7 +6,7 @@
 export const config = {
   projectKey: "PS",
 
-  // Issue type used by the :ack: reaction flow (lightweight ad-hoc tickets).
+  // Issue type used by the :on_it: reaction flow (lightweight ad-hoc tickets).
   // PS is a service desk project; available types include Support, New Feature,
   // Idea, and various Incident types. "Task" does NOT exist on PS.
   ackIssueType: "Support",
@@ -19,8 +19,8 @@ export const config = {
   doneTransitionName: "Done",
 
   // Emoji names (no colons) that trigger each action
-  ackEmoji: "ack",
-  doneEmoji: "done",
+  ackEmoji: "on_it",
+  doneEmoji: "resolved",
   muteEmoji: "mute",
 
   // Regex to find an existing ticket key in a message body (case-insensitive)

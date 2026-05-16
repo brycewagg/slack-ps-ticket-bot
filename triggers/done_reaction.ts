@@ -6,7 +6,7 @@ import { config } from "../config.ts";
 const trigger: Trigger<typeof DoneReactionWorkflow.definition> = {
   type: TriggerTypes.Event,
   name: "DONE reaction added",
-  description: "Fires when :done: is added to a message in a watched channel",
+  description: "Fires when :resolved: is added to a message in a watched channel",
   workflow: `#/workflows/${DoneReactionWorkflow.definition.callback_id}`,
   event: {
     event_type: TriggerEventTypes.ReactionAdded,

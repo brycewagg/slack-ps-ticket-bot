@@ -6,7 +6,7 @@ import { config } from "../config.ts";
 const trigger: Trigger<typeof AckReactionWorkflow.definition> = {
   type: TriggerTypes.Event,
   name: "ACK reaction added",
-  description: "Fires when :ack: is added to a message in a watched channel",
+  description: "Fires when :on_it: is added to a message in a watched channel",
   workflow: `#/workflows/${AckReactionWorkflow.definition.callback_id}`,
   event: {
     event_type: TriggerEventTypes.ReactionAdded,
