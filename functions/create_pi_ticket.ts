@@ -31,24 +31,49 @@ export const CreatePiTicketFunction = DefineFunction({
   },
 });
 
-export default SlackFunction(CreatePiTicketFunction, async ({ inputs, env }) => {
+export default SlackFunction(CreatePiTicketFunction, async ({ inputs, client, env }) => {
   const cf = config.jiraCustomFields;
+
+  // Resolve submitter display name so the description reads cleanly.
+  let submitterName = inputs.submitter_id;
+  try {
+    const u = await client.users.info({ user: inputs.submitter_id });
+    if (u.ok && u.user) {
+      submitterName = u.user.profile?.display_name_normalized ||
+        u.user.profile?.real_name_normalized ||
+        u.user.real_name ||
+        u.user.name ||
+        inputs.submitter_id;
+    }
+  } catch (e) {
+    console.error("users.info failed", e);
+  }
+
+  const descriptionAdf = {
+    type: "doc",
+    version: 1,
+    content: [
+      {
+        type: "paragraph",
+        content: [
+          { type: "text", text: "Filed from the Slack PI Ticket form by " },
+          { type: "text", text: submitterName, marks: [{ type: "strong" }] },
+          { type: "text", text: "." },
+        ],
+      },
+      { type: "rule" },
+      {
+        type: "paragraph",
+        content: [{ type: "text", text: inputs.description }],
+      },
+    ],
+  };
 
   const fields: Record<string, unknown> = {
     project: { key: config.projectKey },
     issuetype: { name: config.piIssueType },
     summary: inputs.summary,
-    description: {
-      type: "doc",
-      version: 1,
-      content: [{
-        type: "paragraph",
-        content: [{
-          type: "text",
-          text: `${inputs.description}\n\nFiled from Slack by <@${inputs.submitter_id}>`,
-        }],
-      }],
-    },
+    description: descriptionAdf,
     // multi-select expects an array of { value }
     [cf.piIssueType]: inputs.pi_type.map((v) => ({ value: v })),
     [cf.advertiser]: inputs.advertiser,

@@ -2,12 +2,12 @@ import { DefineFunction, Schema, SlackFunction } from "deno-slack-sdk/mod.ts";
 import { config } from "../config.ts";
 import {
   addRemoteSlackLink,
-  createIssue,
   createIssueWithFields,
   issueExists,
 } from "./utils/jira.ts";
 import { ThreadTicketDatastore, threadKey } from "../datastores/thread_ticket_map.ts";
 import { parsePi } from "./utils/parse_pi.ts";
+import { buildSlackSourcedDescription } from "./utils/description.ts";
 
 // Issue type ID for Performance Investigation on PS (validated 2026-05-15)
 const PI_ISSUE_TYPE_ID = "12823";
@@ -47,6 +47,40 @@ async function recordThreadMapping(
   });
 }
 
+async function resolveDisplayName(
+  // deno-lint-ignore no-explicit-any
+  client: any,
+  userId: string,
+): Promise<string> {
+  try {
+    const res = await client.users.info({ user: userId });
+    if (res.ok && res.user) {
+      return res.user.profile?.display_name_normalized ||
+        res.user.profile?.real_name_normalized ||
+        res.user.real_name ||
+        res.user.name ||
+        userId;
+    }
+  } catch (e) {
+    console.error("users.info failed", e);
+  }
+  return userId;
+}
+
+async function resolveChannelName(
+  // deno-lint-ignore no-explicit-any
+  client: any,
+  channelId: string,
+): Promise<string | undefined> {
+  try {
+    const res = await client.conversations.info({ channel: channelId });
+    if (res.ok && res.channel?.name) return res.channel.name;
+  } catch (e) {
+    console.error("conversations.info failed", e);
+  }
+  return undefined;
+}
+
 export default SlackFunction(HandleAckFunction, async ({ inputs, client, env }) => {
   const { channel_id, message_ts, reacting_user_id } = inputs;
 
@@ -63,10 +97,11 @@ export default SlackFunction(HandleAckFunction, async ({ inputs, client, env }) 
   const message = history.messages[0];
   const text: string = message.text ?? "";
 
-  const permalinkRes = await client.chat.getPermalink({
-    channel: channel_id,
-    message_ts,
-  });
+  const [permalinkRes, reactorName, channelName] = await Promise.all([
+    client.chat.getPermalink({ channel: channel_id, message_ts }),
+    resolveDisplayName(client, reacting_user_id),
+    resolveChannelName(client, channel_id),
+  ]);
   const permalink: string = permalinkRes.ok ? permalinkRes.permalink : "";
 
   const existingMatch = text.match(config.ticketKeyRegex);
@@ -77,7 +112,7 @@ export default SlackFunction(HandleAckFunction, async ({ inputs, client, env }) 
       try {
         await addRemoteSlackLink(env, key, {
           url: permalink,
-          title: `Slack message (reacted by <@${reacting_user_id}>)`,
+          title: `Slack message (reacted by ${reactorName})`,
         });
       } catch (e) {
         console.error("addRemoteSlackLink failed", e);
@@ -98,7 +133,6 @@ export default SlackFunction(HandleAckFunction, async ({ inputs, client, env }) 
   const pi = parsePi(text);
   const firstLine = text.split("\n")[0].slice(0, 200) || "Slack message";
 
-  // PI alerts: use Performance Investigation issue type + extracted fields.
   // Summary preference: "<Advertiser> — <Campaign>" if both, else campaign, else first line.
   let summary: string;
   if (pi.isPiAlert && (pi.advertiser || pi.campaignName)) {
@@ -108,48 +142,36 @@ export default SlackFunction(HandleAckFunction, async ({ inputs, client, env }) 
     summary = firstLine.length < text.length ? `${firstLine}…` : firstLine;
   }
 
-  const descriptionText =
-    `Opened from Slack via :${config.ackEmoji}: by <@${reacting_user_id}>.\n\n` +
-    `Slack permalink: ${permalink}\n\n---\n${text}`;
+  const description = buildSlackSourcedDescription({
+    reactorDisplayName: reactorName,
+    permalink,
+    originalText: text,
+    channelName,
+  });
+
+  const cf = config.jiraCustomFields;
+  const fields: Record<string, unknown> = {
+    project: { key: config.projectKey },
+    issuetype: { id: pi.isPiAlert ? PI_ISSUE_TYPE_ID : config.ackIssueTypeId },
+    summary,
+    description,
+  };
+
+  if (pi.isPiAlert) {
+    if (pi.advertiser) fields[cf.advertiser] = pi.advertiser;
+    if (pi.aidAffected) fields[cf.aidAffected] = pi.aidAffected;
+    if (pi.campaignGroupId) fields[cf.campaignGroupId] = pi.campaignGroupId;
+    if (pi.projectedUnderspend) fields[cf.projectedUnderspend] = pi.projectedUnderspend;
+    if (pi.monthlyBudget) fields[cf.revenueImpact] = pi.monthlyBudget;
+    if (pi.agency) fields[cf.agency] = pi.agency;
+    if (pi.piIssueType) fields[cf.piIssueType] = [{ value: pi.piIssueType }];
+  }
 
   try {
-    let created: { key: string; id: string };
-    if (pi.isPiAlert) {
-      const cf = config.jiraCustomFields;
-      const fields: Record<string, unknown> = {
-        project: { key: config.projectKey },
-        issuetype: { id: PI_ISSUE_TYPE_ID },
-        summary,
-        description: {
-          type: "doc",
-          version: 1,
-          content: [{
-            type: "paragraph",
-            content: [{ type: "text", text: descriptionText }],
-          }],
-        },
-      };
-      if (pi.advertiser) fields[cf.advertiser] = pi.advertiser;
-      if (pi.aidAffected) fields[cf.aidAffected] = pi.aidAffected;
-      if (pi.campaignGroupId) fields[cf.campaignGroupId] = pi.campaignGroupId;
-      if (pi.projectedUnderspend) fields[cf.projectedUnderspend] = pi.projectedUnderspend;
-      if (pi.monthlyBudget) fields[cf.revenueImpact] = pi.monthlyBudget;
-      if (pi.agency) fields[cf.agency] = pi.agency;
-      if (pi.piIssueType) {
-        fields[cf.piIssueType] = [{ value: pi.piIssueType }];
-      }
-      created = await createIssueWithFields(env, fields);
-    } else {
-      created = await createIssue(env, {
-        projectKey: config.projectKey,
-        issueTypeId: config.ackIssueTypeId,
-        summary,
-        descriptionText,
-      });
-    }
+    const created = await createIssueWithFields(env, fields);
     await addRemoteSlackLink(env, created.key, {
       url: permalink,
-      title: "Slack source message",
+      title: channelName ? `Slack message in #${channelName}` : "Slack source message",
     });
     await recordThreadMapping(client, channel_id, message_ts, created.key);
     await client.chat.postEphemeral({
