@@ -1,11 +1,12 @@
 import { DefineFunction, Schema, SlackFunction } from "deno-slack-sdk/mod.ts";
 import { config } from "../config.ts";
 import { transitionIssue } from "./utils/jira.ts";
+import { ThreadTicketDatastore, threadKey } from "../datastores/thread_ticket_map.ts";
 
 export const HandleDoneFunction = DefineFunction({
   callback_id: "handle_done",
   title: "Handle DONE reaction",
-  description: "Transition a PS ticket referenced in the message to Done",
+  description: "Transition a PS ticket referenced in the message (or its thread) to Done",
   source_file: "functions/handle_done.ts",
   input_parameters: {
     properties: {
@@ -27,17 +28,42 @@ export default SlackFunction(HandleDoneFunction, async ({ inputs, client, env })
     inclusive: true,
     limit: 1,
   });
-  if (!history.ok || !history.messages?.length) {
-    console.error("conversations.history failed", history);
-    return { outputs: {} };
-  }
-  const text: string = history.messages[0].text ?? "";
+  const msg = history.ok ? history.messages?.[0] : undefined;
+  const text: string = msg?.text ?? "";
+  const rootTs: string = msg?.thread_ts ?? message_ts;
 
-  const match = text.match(config.ticketKeyRegex);
-  if (!match) {
+  // Strategy 1: look up the thread → ticket mapping in the datastore.
+  // This is the cleanest path because :on_it: writes that mapping.
+  let key: string | undefined;
+  try {
+    const lookup = await client.apps.datastore.get({
+      datastore: ThreadTicketDatastore.name,
+      id: threadKey(channel_id, rootTs),
+    });
+    if (lookup.ok && lookup.item && lookup.item.jira_key) {
+      key = lookup.item.jira_key as string;
+    }
+  } catch (e) {
+    console.error("datastore lookup failed", e);
+  }
+
+  // Strategy 2: fall back to parsing a PS-### key from the message body.
+  if (!key) {
+    const match = text.match(config.ticketKeyRegex);
+    if (match) key = match[0].toUpperCase();
+  }
+
+  if (!key) {
+    await client.chat.postEphemeral({
+      channel: channel_id,
+      user: reacting_user_id,
+      text:
+        `No ticket found for this message or thread. ` +
+        `Make sure the original message was opened with :${config.ackEmoji}:, ` +
+        `or include a PS-### key in the message body.`,
+    });
     return { outputs: {} };
   }
-  const key = match[0].toUpperCase();
 
   const result = await transitionIssue(env, key, config.doneTransitionName);
   if (result.transitioned) {
