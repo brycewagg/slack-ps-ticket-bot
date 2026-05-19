@@ -143,10 +143,13 @@ export async function transitionIssue(
   const { transitions } = await tRes.json() as {
     transitions: Array<{ id: string; name: string; to: { name: string } }>;
   };
-  const match = transitions.find((t) =>
-    t.name.toLowerCase() === transitionName.toLowerCase() ||
-    t.to.name.toLowerCase() === transitionName.toLowerCase()
-  );
+  // Prefer exact name match (more predictable; avoids ambiguity with screened
+  // transitions like "Resolve Issue" that share a destination status). Only
+  // fall back to destination-status match if the name match misses.
+  const want = transitionName.toLowerCase();
+  const match =
+    transitions.find((t) => t.name.toLowerCase() === want) ??
+    transitions.find((t) => t.to.name.toLowerCase() === want);
   if (!match) {
     return {
       transitioned: false,

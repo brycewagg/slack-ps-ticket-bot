@@ -16,8 +16,10 @@ export const config = {
   // If PI tickets are a dedicated issue type, name it here. Otherwise leave as Task.
   piIssueType: "Performance Investigation",
 
-  // Transition name to move a ticket to Done
-  doneTransitionName: "Done",
+  // Transition name to move a ticket to a terminal/done state.
+  // PS workflow has no transition called "Done"; the screen-less
+  // global transition is "Resolved" (id 781, → Resolved status).
+  doneTransitionName: "Resolved",
 
   // Emoji names (no colons) that trigger each action
   ackEmoji: "on_it",
