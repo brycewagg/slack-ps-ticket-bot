@@ -1,7 +1,16 @@
 import { DefineFunction, Schema, SlackFunction } from "deno-slack-sdk/mod.ts";
 import { config } from "../config.ts";
-import { addRemoteSlackLink, createIssue, issueExists } from "./utils/jira.ts";
+import {
+  addRemoteSlackLink,
+  createIssue,
+  createIssueWithFields,
+  issueExists,
+} from "./utils/jira.ts";
 import { ThreadTicketDatastore, threadKey } from "../datastores/thread_ticket_map.ts";
+import { parsePi } from "./utils/parse_pi.ts";
+
+// Issue type ID for Performance Investigation on PS (validated 2026-05-15)
+const PI_ISSUE_TYPE_ID = "12823";
 
 export const HandleAckFunction = DefineFunction({
   callback_id: "handle_ack",
@@ -86,19 +95,58 @@ export default SlackFunction(HandleAckFunction, async ({ inputs, client, env }) 
     }
   }
 
+  const pi = parsePi(text);
   const firstLine = text.split("\n")[0].slice(0, 200) || "Slack message";
-  const summary = firstLine.length < text.length ? `${firstLine}…` : firstLine;
+
+  // PI alerts: use Performance Investigation issue type + extracted fields.
+  // Summary preference: "<Advertiser> — <Campaign>" if both, else campaign, else first line.
+  let summary: string;
+  if (pi.isPiAlert && (pi.advertiser || pi.campaignName)) {
+    const parts = [pi.advertiser, pi.campaignName].filter(Boolean);
+    summary = parts.join(" — ").slice(0, 200) || firstLine;
+  } else {
+    summary = firstLine.length < text.length ? `${firstLine}…` : firstLine;
+  }
+
   const descriptionText =
     `Opened from Slack via :${config.ackEmoji}: by <@${reacting_user_id}>.\n\n` +
     `Slack permalink: ${permalink}\n\n---\n${text}`;
 
   try {
-    const created = await createIssue(env, {
-      projectKey: config.projectKey,
-      issueTypeId: config.ackIssueTypeId,
-      summary,
-      descriptionText,
-    });
+    let created: { key: string; id: string };
+    if (pi.isPiAlert) {
+      const cf = config.jiraCustomFields;
+      const fields: Record<string, unknown> = {
+        project: { key: config.projectKey },
+        issuetype: { id: PI_ISSUE_TYPE_ID },
+        summary,
+        description: {
+          type: "doc",
+          version: 1,
+          content: [{
+            type: "paragraph",
+            content: [{ type: "text", text: descriptionText }],
+          }],
+        },
+      };
+      if (pi.advertiser) fields[cf.advertiser] = pi.advertiser;
+      if (pi.aidAffected) fields[cf.aidAffected] = pi.aidAffected;
+      if (pi.campaignGroupId) fields[cf.campaignGroupId] = pi.campaignGroupId;
+      if (pi.projectedUnderspend) fields[cf.projectedUnderspend] = pi.projectedUnderspend;
+      if (pi.monthlyBudget) fields[cf.revenueImpact] = pi.monthlyBudget;
+      if (pi.agency) fields[cf.agency] = pi.agency;
+      if (pi.piIssueType) {
+        fields[cf.piIssueType] = [{ value: pi.piIssueType }];
+      }
+      created = await createIssueWithFields(env, fields);
+    } else {
+      created = await createIssue(env, {
+        projectKey: config.projectKey,
+        issueTypeId: config.ackIssueTypeId,
+        summary,
+        descriptionText,
+      });
+    }
     await addRemoteSlackLink(env, created.key, {
       url: permalink,
       title: "Slack source message",
