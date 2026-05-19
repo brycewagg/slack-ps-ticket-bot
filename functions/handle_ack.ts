@@ -95,7 +95,7 @@ export default SlackFunction(HandleAckFunction, async ({ inputs, client, env }) 
   try {
     const created = await createIssue(env, {
       projectKey: config.projectKey,
-      issueType: config.issueType,
+      issueType: config.ackIssueType,
       summary,
       descriptionText,
     });
