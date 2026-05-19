@@ -45,13 +45,13 @@ export async function issueExists(
 
 export async function createIssue(
   env: Record<string, string>,
-  args: { projectKey: string; issueType: string; summary: string; descriptionText: string },
+  args: { projectKey: string; issueTypeId: string; summary: string; descriptionText: string },
 ): Promise<{ key: string; id: string }> {
   const body = {
     fields: {
       project: { key: args.projectKey },
       summary: args.summary,
-      issuetype: { name: args.issueType },
+      issuetype: { id: args.issueTypeId },
       description: {
         type: "doc",
         version: 1,

@@ -7,9 +7,10 @@ export const config = {
   projectKey: "PS",
 
   // Issue type used by the :on_it: reaction flow (lightweight ad-hoc tickets).
-  // PS is a service desk project; available types include Support, New Feature,
-  // Idea, and various Incident types. "Task" does NOT exist on PS.
-  ackIssueType: "Support",
+  // Sent by ID (more reliable than name on service-desk projects).
+  // PS issue type IDs: Support=11222, New Feature=11221, Idea=11391,
+  //                    Performance Investigation=12823
+  ackIssueTypeId: "11222",
 
   // Issue type used by the /pi-ticket form. Must exist on the PS project.
   // If PI tickets are a dedicated issue type, name it here. Otherwise leave as Task.
