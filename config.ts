@@ -16,10 +16,15 @@ export const config = {
   // If PI tickets are a dedicated issue type, name it here. Otherwise leave as Task.
   piIssueType: "Performance Investigation",
 
-  // Transition name to move a ticket to a terminal/done state.
-  // PS workflow has no transition called "Done"; the screen-less
-  // global transition is "Resolved" (id 781, → Resolved status).
+  // Default terminal transition for ticket types that don't have an override.
+  // Support tickets and most other PS types use "Resolved" (id 781).
   doneTransitionName: "Resolved",
+
+  // Per-issue-type override. PI tickets have a literal "Done" transition
+  // (id 1111) so :resolved: routes them to Done instead of Resolved.
+  doneTransitionByIssueTypeId: {
+    "12823": "Done", // Performance Investigation
+  } as Record<string, string>,
 
   // Emoji names (no colons) that trigger each action
   ackEmoji: "on_it",
@@ -32,7 +37,8 @@ export const config = {
   // Channels where reaction + message event triggers are active.
   // Slack event triggers must be scoped to specific channels at install time.
   channelIds: [
-    "C0B4PTZEEC8", // #test-rx
+    "C0B4PTZEEC8", // #test-rx (sandbox)
+    "C0B1JSHRZSL", // #test-daily-customer-perf (broader team testing)
   ],
 
   // Default PMO Rep. Must match a value from pmoRepOptions exactly.

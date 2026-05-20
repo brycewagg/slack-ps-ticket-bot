@@ -1,6 +1,6 @@
 import { DefineFunction, Schema, SlackFunction } from "deno-slack-sdk/mod.ts";
 import { config } from "../config.ts";
-import { transitionIssue } from "./utils/jira.ts";
+import { getIssueTypeId, transitionIssue } from "./utils/jira.ts";
 import { ThreadTicketDatastore, threadKey } from "../datastores/thread_ticket_map.ts";
 
 export const HandleDoneFunction = DefineFunction({
@@ -65,12 +65,23 @@ export default SlackFunction(HandleDoneFunction, async ({ inputs, client, env })
     return { outputs: {} };
   }
 
-  const result = await transitionIssue(env, key, config.doneTransitionName);
+  // Pick transition by issue type. PI tickets use "Done"; others use "Resolved".
+  let transitionName = config.doneTransitionName;
+  try {
+    const issueTypeId = await getIssueTypeId(env, key);
+    if (issueTypeId && config.doneTransitionByIssueTypeId[issueTypeId]) {
+      transitionName = config.doneTransitionByIssueTypeId[issueTypeId];
+    }
+  } catch (e) {
+    console.error("issue type lookup failed; using default transition", e);
+  }
+
+  const result = await transitionIssue(env, key, transitionName);
   if (result.transitioned) {
     await client.chat.postEphemeral({
       channel: channel_id,
       user: reacting_user_id,
-      text: `Transitioned *${key}* to ${config.doneTransitionName}.`,
+      text: `Transitioned *${key}* to ${transitionName}.`,
     });
   } else {
     await client.chat.postEphemeral({

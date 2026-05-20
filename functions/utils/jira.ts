@@ -35,12 +35,41 @@ async function jiraFetch(
   });
 }
 
+/** Look up a Jira accountId by email. Returns undefined if no match. */
+export async function findUserAccountIdByEmail(
+  env: Record<string, string>,
+  email: string,
+): Promise<string | undefined> {
+  const res = await jiraFetch(
+    env,
+    `/rest/api/3/user/search?query=${encodeURIComponent(email)}`,
+  );
+  if (!res.ok) return undefined;
+  const users = await res.json() as Array<{ accountId: string; emailAddress?: string }>;
+  // Prefer exact email match; fall back to first result if none match exactly.
+  const exact = users.find((u) =>
+    u.emailAddress && u.emailAddress.toLowerCase() === email.toLowerCase()
+  );
+  return (exact ?? users[0])?.accountId;
+}
+
 export async function issueExists(
   env: Record<string, string>,
   key: string,
 ): Promise<boolean> {
   const res = await jiraFetch(env, `/rest/api/3/issue/${key}?fields=summary`);
   return res.ok;
+}
+
+/** Get an issue's issue type id (used to pick the right "done" transition). */
+export async function getIssueTypeId(
+  env: Record<string, string>,
+  key: string,
+): Promise<string | undefined> {
+  const res = await jiraFetch(env, `/rest/api/3/issue/${key}?fields=issuetype`);
+  if (!res.ok) return undefined;
+  const body = await res.json() as { fields?: { issuetype?: { id?: string } } };
+  return body.fields?.issuetype?.id;
 }
 
 export async function createIssue(

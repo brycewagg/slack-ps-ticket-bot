@@ -12,8 +12,8 @@ import { CreatePiTicketFunction } from "./functions/create_pi_ticket.ts";
 import { ThreadTicketDatastore } from "./datastores/thread_ticket_map.ts";
 
 export default Manifest({
-  name: "PS Ticket Bot",
-  description: "Open, comment on, and close PS Jira tickets via Slack",
+  name: "PI Ticket Bot",
+  description: "Open, comment on, and close Performance Investigation tickets via Slack",
   icon: "assets/icon.png",
   workflows: [
     AckReactionWorkflow,

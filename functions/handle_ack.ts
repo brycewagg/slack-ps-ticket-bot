@@ -3,6 +3,7 @@ import { config } from "../config.ts";
 import {
   addRemoteSlackLink,
   createIssueWithFields,
+  findUserAccountIdByEmail,
   issueExists,
 } from "./utils/jira.ts";
 import { ThreadTicketDatastore, threadKey } from "../datastores/thread_ticket_map.ts";
@@ -47,24 +48,26 @@ async function recordThreadMapping(
   });
 }
 
-async function resolveDisplayName(
+async function resolveSlackUser(
   // deno-lint-ignore no-explicit-any
   client: any,
   userId: string,
-): Promise<string> {
+): Promise<{ displayName: string; email?: string }> {
   try {
     const res = await client.users.info({ user: userId });
     if (res.ok && res.user) {
-      return res.user.profile?.display_name_normalized ||
+      const displayName = res.user.profile?.display_name_normalized ||
         res.user.profile?.real_name_normalized ||
         res.user.real_name ||
         res.user.name ||
         userId;
+      const email = res.user.profile?.email;
+      return { displayName, email };
     }
   } catch (e) {
     console.error("users.info failed", e);
   }
-  return userId;
+  return { displayName: userId };
 }
 
 async function resolveChannelName(
@@ -97,12 +100,38 @@ export default SlackFunction(HandleAckFunction, async ({ inputs, client, env }) 
   const message = history.messages[0];
   const text: string = message.text ?? "";
 
-  const [permalinkRes, reactorName, channelName] = await Promise.all([
+  const [permalinkRes, reactor, channelName] = await Promise.all([
     client.chat.getPermalink({ channel: channel_id, message_ts }),
-    resolveDisplayName(client, reacting_user_id),
+    resolveSlackUser(client, reacting_user_id),
     resolveChannelName(client, channel_id),
   ]);
   const permalink: string = permalinkRes.ok ? permalinkRes.permalink : "";
+  const reactorName = reactor.displayName;
+
+  // Reporter should be the MESSAGE AUTHOR (the issue raiser), not the reactor.
+  // Jen's PS automation rules key off Reporter: if a PEM creates the ticket,
+  // it auto-assigns to Tof; if Tof creates it, it stays unassigned. The
+  // reactor (on-call PM) is acknowledging the issue, not raising it.
+  // Falls back to the reactor if the message is from a bot or has no user.
+  const messageAuthorId: string | undefined = message.user || undefined;
+  let reporterAccountId: string | undefined;
+  if (messageAuthorId && !message.bot_id) {
+    const author = await resolveSlackUser(client, messageAuthorId);
+    if (author.email) {
+      try {
+        reporterAccountId = await findUserAccountIdByEmail(env, author.email);
+      } catch (e) {
+        console.error("Jira user lookup (author) failed", e);
+      }
+    }
+  }
+  if (!reporterAccountId && reactor.email) {
+    try {
+      reporterAccountId = await findUserAccountIdByEmail(env, reactor.email);
+    } catch (e) {
+      console.error("Jira user lookup (reactor fallback) failed", e);
+    }
+  }
 
   const existingMatch = text.match(config.ticketKeyRegex);
   if (existingMatch) {
@@ -156,6 +185,9 @@ export default SlackFunction(HandleAckFunction, async ({ inputs, client, env }) 
     summary,
     description,
   };
+  if (reporterAccountId) {
+    fields.reporter = { accountId: reporterAccountId };
+  }
 
   if (pi.isPiAlert) {
     if (pi.advertiser) fields[cf.advertiser] = pi.advertiser;
