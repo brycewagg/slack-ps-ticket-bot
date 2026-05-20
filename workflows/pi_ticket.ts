@@ -19,7 +19,7 @@ const form = PiTicketWorkflow.addStep(Schema.slack.functions.OpenForm, {
   interactivity: PiTicketWorkflow.inputs.interactivity,
   submit_label: "Open ticket",
   description:
-    "Performance Investigation intake. PMO Rep is auto-set by Jira automation. PI Issue Type is filled by AI after submission.",
+    "Performance Investigation intake. PMO Rep is auto-set by Jira automation.",
   fields: {
     elements: [
       { name: "summary", title: "Title", type: Schema.types.string },
@@ -28,6 +28,12 @@ const form = PiTicketWorkflow.addStep(Schema.slack.functions.OpenForm, {
         title: "Description",
         type: Schema.types.string,
         long: true,
+      },
+      {
+        name: "pi_type",
+        title: "PI Issue Type",
+        type: Schema.types.string,
+        enum: ["Performance", "Pacing"],
       },
       { name: "advertiser", title: "Advertiser", type: Schema.types.string },
       { name: "agency", title: "Agency", type: Schema.types.string },
@@ -53,6 +59,7 @@ const form = PiTicketWorkflow.addStep(Schema.slack.functions.OpenForm, {
     required: [
       "summary",
       "description",
+      "pi_type",
       "advertiser",
       "agency",
       "aid_affected",
@@ -67,6 +74,7 @@ const created = PiTicketWorkflow.addStep(CreatePiTicketFunction, {
   submitter_id: PiTicketWorkflow.inputs.interactivity.interactor.id,
   summary: form.outputs.fields.summary,
   description: form.outputs.fields.description,
+  pi_type: form.outputs.fields.pi_type,
   advertiser: form.outputs.fields.advertiser,
   agency: form.outputs.fields.agency,
   aid_affected: form.outputs.fields.aid_affected,

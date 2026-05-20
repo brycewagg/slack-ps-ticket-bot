@@ -1,7 +1,6 @@
 import { DefineFunction, Schema, SlackFunction } from "deno-slack-sdk/mod.ts";
 import { config } from "../config.ts";
 import { createIssueWithFields, findUserAccountIdByEmail } from "./utils/jira.ts";
-import { parsePi } from "./utils/parse_pi.ts";
 
 export const CreatePiTicketFunction = DefineFunction({
   callback_id: "create_pi_ticket",
@@ -12,6 +11,7 @@ export const CreatePiTicketFunction = DefineFunction({
       submitter_id: { type: Schema.slack.types.user_id },
       summary: { type: Schema.types.string },
       description: { type: Schema.types.string },
+      pi_type: { type: Schema.types.string },
       revenue_impact: { type: Schema.types.string },
       projected_underspend: { type: Schema.types.string },
       advertiser: { type: Schema.types.string },
@@ -19,7 +19,7 @@ export const CreatePiTicketFunction = DefineFunction({
       aid_affected: { type: Schema.types.string },
       campaign_group_id: { type: Schema.types.string },
     },
-    required: ["submitter_id", "summary", "description", "advertiser"],
+    required: ["submitter_id", "summary", "description", "pi_type", "advertiser"],
   },
   output_parameters: {
     properties: {
@@ -91,13 +91,9 @@ export default SlackFunction(CreatePiTicketFunction, async ({ inputs, client, en
     fields.reporter = { accountId: submitterJiraAccountId };
   }
 
-  // Try to infer PI Issue Type from the form text. If detection fails the
-  // field stays blank and Jen's Rovo AI agent can fill it post-creation.
+  // PI Issue Type comes from the form as a required dropdown.
   // PMO Rep is auto-set by Jira automation to Trixy.
-  const piHeuristic = parsePi(`${inputs.summary}\n${inputs.description}`);
-  if (piHeuristic.piIssueType) {
-    fields[cf.piIssueType] = [{ value: piHeuristic.piIssueType }];
-  }
+  fields[cf.piIssueType] = [{ value: inputs.pi_type }];
 
   if (inputs.agency) fields[cf.agency] = inputs.agency;
   if (inputs.aid_affected) fields[cf.aidAffected] = inputs.aid_affected;
