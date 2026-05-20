@@ -1,6 +1,7 @@
 import { DefineFunction, Schema, SlackFunction } from "deno-slack-sdk/mod.ts";
 import { config } from "../config.ts";
 import { createIssueWithFields, findUserAccountIdByEmail } from "./utils/jira.ts";
+import { parsePi } from "./utils/parse_pi.ts";
 
 export const CreatePiTicketFunction = DefineFunction({
   callback_id: "create_pi_ticket",
@@ -90,8 +91,14 @@ export default SlackFunction(CreatePiTicketFunction, async ({ inputs, client, en
     fields.reporter = { accountId: submitterJiraAccountId };
   }
 
-  // PI Issue Type is intentionally NOT set here. Jen's Rovo AI agent fills it
-  // after creation. PMO Rep is also auto-set by Jira automation to Trixy.
+  // Try to infer PI Issue Type from the form text. If detection fails the
+  // field stays blank and Jen's Rovo AI agent can fill it post-creation.
+  // PMO Rep is auto-set by Jira automation to Trixy.
+  const piHeuristic = parsePi(`${inputs.summary}\n${inputs.description}`);
+  if (piHeuristic.piIssueType) {
+    fields[cf.piIssueType] = [{ value: piHeuristic.piIssueType }];
+  }
+
   if (inputs.agency) fields[cf.agency] = inputs.agency;
   if (inputs.aid_affected) fields[cf.aidAffected] = inputs.aid_affected;
   if (inputs.campaign_group_id) fields[cf.campaignGroupId] = inputs.campaign_group_id;
