@@ -59,7 +59,6 @@ const form = PiTicketWorkflow.addStep(Schema.slack.functions.OpenForm, {
     required: [
       "summary",
       "description",
-      "pi_type",
       "advertiser",
       "agency",
       "aid_affected",
