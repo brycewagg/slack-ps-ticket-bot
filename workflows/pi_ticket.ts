@@ -1,6 +1,5 @@
 import { DefineWorkflow, Schema } from "deno-slack-sdk/mod.ts";
 import { CreatePiTicketFunction } from "../functions/create_pi_ticket.ts";
-import { config } from "../config.ts";
 
 export const PiTicketWorkflow = DefineWorkflow({
   callback_id: "pi_ticket_workflow",
@@ -20,7 +19,7 @@ const form = PiTicketWorkflow.addStep(Schema.slack.functions.OpenForm, {
   interactivity: PiTicketWorkflow.inputs.interactivity,
   submit_label: "Open ticket",
   description:
-    "Performance Investigation intake. Assignee is left blank for manual routing.",
+    "Performance Investigation intake. PMO Rep is auto-set by Jira automation. PI Issue Type is filled by AI after submission.",
   fields: {
     elements: [
       { name: "summary", title: "Title", type: Schema.types.string },
@@ -29,12 +28,6 @@ const form = PiTicketWorkflow.addStep(Schema.slack.functions.OpenForm, {
         title: "Description",
         type: Schema.types.string,
         long: true,
-      },
-      {
-        name: "pi_type",
-        title: "PI Issue Type",
-        type: Schema.types.array,
-        items: { type: Schema.types.string, enum: ["Performance", "Pacing"] },
       },
       { name: "advertiser", title: "Advertiser", type: Schema.types.string },
       { name: "agency", title: "Agency", type: Schema.types.string },
@@ -54,15 +47,19 @@ const form = PiTicketWorkflow.addStep(Schema.slack.functions.OpenForm, {
         title: "Projected Underspend (Tof/Johnny fill if flagging)",
         type: Schema.types.string,
       },
-      {
-        name: "pmo_rep",
-        title: "PMO Rep",
-        type: Schema.types.string,
-        enum: config.pmoRepOptions,
-        default: config.defaultPmoRep,
-      },
     ],
-    required: ["summary", "description", "pi_type", "advertiser"],
+    // Everything required so Slack doesn't render "(optional)" on any field.
+    // Users put "N/A" where a value genuinely doesn't apply.
+    required: [
+      "summary",
+      "description",
+      "advertiser",
+      "agency",
+      "aid_affected",
+      "campaign_group_id",
+      "revenue_impact",
+      "projected_underspend",
+    ],
   },
 });
 
@@ -70,14 +67,12 @@ const created = PiTicketWorkflow.addStep(CreatePiTicketFunction, {
   submitter_id: PiTicketWorkflow.inputs.interactivity.interactor.id,
   summary: form.outputs.fields.summary,
   description: form.outputs.fields.description,
-  pi_type: form.outputs.fields.pi_type,
   advertiser: form.outputs.fields.advertiser,
   agency: form.outputs.fields.agency,
   aid_affected: form.outputs.fields.aid_affected,
   campaign_group_id: form.outputs.fields.campaign_group_id,
   revenue_impact: form.outputs.fields.revenue_impact,
   projected_underspend: form.outputs.fields.projected_underspend,
-  pmo_rep: form.outputs.fields.pmo_rep,
 });
 
 PiTicketWorkflow.addStep(Schema.slack.functions.SendDm, {
