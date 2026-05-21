@@ -54,18 +54,9 @@ const form = PiTicketWorkflow.addStep(Schema.slack.functions.OpenForm, {
         type: Schema.types.string,
       },
     ],
-    // Everything required so Slack doesn't render "(optional)" on any field.
-    // Users put "N/A" where a value genuinely doesn't apply.
-    required: [
-      "summary",
-      "description",
-      "advertiser",
-      "agency",
-      "aid_affected",
-      "campaign_group_id",
-      "revenue_impact",
-      "projected_underspend",
-    ],
+    // Only the bare essentials are required. Per Jen, she doesn't want
+    // anything mandatory right now while the team is still adopting it.
+    required: ["summary", "description"],
   },
 });
 

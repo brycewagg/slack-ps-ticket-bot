@@ -19,7 +19,7 @@ export const CreatePiTicketFunction = DefineFunction({
       aid_affected: { type: Schema.types.string },
       campaign_group_id: { type: Schema.types.string },
     },
-    required: ["submitter_id", "summary", "description", "advertiser"],
+    required: ["submitter_id", "summary", "description"],
   },
   output_parameters: {
     properties: {
@@ -85,18 +85,18 @@ export default SlackFunction(CreatePiTicketFunction, async ({ inputs, client, en
     issuetype: { name: config.piIssueType },
     summary: inputs.summary,
     description: descriptionAdf,
-    [cf.advertiser]: inputs.advertiser,
   };
   if (submitterJiraAccountId) {
     fields.reporter = { accountId: submitterJiraAccountId };
   }
 
-  // PI Issue Type is optional on the form; only set when provided.
+  // All custom fields are now optional from the form. Only set when provided.
+  // PI Issue Type: filer picks Pacing/Performance if known.
   // PMO Rep is auto-set by Jira automation to Trixy.
   if (inputs.pi_type) {
     fields[cf.piIssueType] = [{ value: inputs.pi_type }];
   }
-
+  if (inputs.advertiser) fields[cf.advertiser] = inputs.advertiser;
   if (inputs.agency) fields[cf.agency] = inputs.agency;
   if (inputs.aid_affected) fields[cf.aidAffected] = inputs.aid_affected;
   if (inputs.campaign_group_id) fields[cf.campaignGroupId] = inputs.campaign_group_id;
