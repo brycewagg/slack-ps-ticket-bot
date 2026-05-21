@@ -147,12 +147,11 @@ export default SlackFunction(HandleAckFunction, async ({ inputs, client, env }) 
         console.error("addRemoteSlackLink failed", e);
       }
       await recordThreadMapping(client, channel_id, message_ts, key);
-      await client.chat.postEphemeral({
+      await client.chat.postMessage({
         channel: channel_id,
-        user: reacting_user_id,
+        thread_ts: message_ts,
         text:
-          `Ticket *${key}* already exists for this message. I added a Slack link to it: ` +
-          `${env.JIRA_BASE_URL}/browse/${key}\n` +
+          `:link: Linked Slack to existing ticket *${key}*: ${env.JIRA_BASE_URL}/browse/${key}\n` +
           `Replies in this thread will sync as Jira comments. React :${config.muteEmoji}: to pause.`,
       });
       return { outputs: {} };
@@ -206,12 +205,11 @@ export default SlackFunction(HandleAckFunction, async ({ inputs, client, env }) 
       title: channelName ? `Slack message in #${channelName}` : "Slack source message",
     });
     await recordThreadMapping(client, channel_id, message_ts, created.key);
-    await client.chat.postEphemeral({
+    await client.chat.postMessage({
       channel: channel_id,
-      user: reacting_user_id,
+      thread_ts: message_ts,
       text:
-        `Opened *${created.key}* in ${config.projectKey}: ` +
-        `${env.JIRA_BASE_URL}/browse/${created.key}\n` +
+        `:rocket: Opened *${created.key}*: ${env.JIRA_BASE_URL}/browse/${created.key}\n` +
         `Replies in this thread will sync as Jira comments. React :${config.muteEmoji}: on the thread root to pause.`,
     });
   } catch (e) {

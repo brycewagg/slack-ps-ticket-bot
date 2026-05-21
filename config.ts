@@ -41,6 +41,10 @@ export const config = {
     "C0B1JSHRZSL", // #test-daily-customer-perf (broader team testing)
   ],
 
+  // Where the bot posts a public notification after a form-submitted ticket.
+  // Reaction-created tickets get a public reply in their source thread instead.
+  piNotificationChannelId: "C0B1JSHRZSL", // #test-daily-customer-perf
+
   // Default PMO Rep. Must match a value from pmoRepOptions exactly.
   defaultPmoRep: "Trixy Tran",
 

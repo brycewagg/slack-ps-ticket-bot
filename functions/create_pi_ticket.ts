@@ -1,6 +1,7 @@
 import { DefineFunction, Schema, SlackFunction } from "deno-slack-sdk/mod.ts";
 import { config } from "../config.ts";
 import { createIssueWithFields, findUserAccountIdByEmail } from "./utils/jira.ts";
+import { ThreadTicketDatastore, threadKey } from "../datastores/thread_ticket_map.ts";
 
 export const CreatePiTicketFunction = DefineFunction({
   callback_id: "create_pi_ticket",
@@ -104,10 +105,39 @@ export default SlackFunction(CreatePiTicketFunction, async ({ inputs, client, en
   if (inputs.projected_underspend) fields[cf.projectedUnderspend] = inputs.projected_underspend;
 
   const created = await createIssueWithFields(env, fields);
+  const jiraUrl = `${env.JIRA_BASE_URL}/browse/${created.key}`;
+
+  // Post a public announcement in the PI channel and register the thread
+  // for comment-sync so follow-up replies land on the Jira ticket.
+  try {
+    const announcement = await client.chat.postMessage({
+      channel: config.piNotificationChannelId,
+      text:
+        `:rocket: New PI ticket: *${created.key}* — ${jiraUrl}\n` +
+        `Filed by <@${inputs.submitter_id}>. Reply in this thread to discuss; ` +
+        `replies sync to Jira as comments. React :${config.muteEmoji}: to pause.`,
+    });
+    if (announcement.ok && announcement.ts) {
+      await client.apps.datastore.put({
+        datastore: ThreadTicketDatastore.name,
+        item: {
+          thread_key: threadKey(config.piNotificationChannelId, announcement.ts),
+          channel_id: config.piNotificationChannelId,
+          thread_ts: announcement.ts,
+          jira_key: created.key,
+          muted: false,
+          created_at: new Date().toISOString(),
+        },
+      });
+    }
+  } catch (e) {
+    console.error("channel announcement failed", e);
+  }
+
   return {
     outputs: {
       jira_key: created.key,
-      jira_url: `${env.JIRA_BASE_URL}/browse/${created.key}`,
+      jira_url: jiraUrl,
     },
   };
 });
