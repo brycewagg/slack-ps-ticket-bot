@@ -2,6 +2,7 @@ import { DefineFunction, Schema, SlackFunction } from "deno-slack-sdk/mod.ts";
 import { config } from "../config.ts";
 import { createIssueWithFields, findUserAccountIdByEmail } from "./utils/jira.ts";
 import { ThreadTicketDatastore, threadKey } from "../datastores/thread_ticket_map.ts";
+import { SLACK_TIMEOUTS, withTimeout } from "./utils/timeout.ts";
 
 export const CreatePiTicketFunction = DefineFunction({
   callback_id: "create_pi_ticket",
@@ -26,10 +27,60 @@ export const CreatePiTicketFunction = DefineFunction({
     properties: {
       jira_key: { type: Schema.types.string },
       jira_url: { type: Schema.types.string },
+      slack_post_status: { type: Schema.types.string },
     },
-    required: ["jira_key", "jira_url"],
+    required: ["jira_key", "jira_url", "slack_post_status"],
   },
 });
+
+function truncate(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return s.slice(0, max - 1).trimEnd() + "…";
+}
+
+/**
+ * Build the channel-announcement text with full ticket context so people don't
+ * have to click into Jira to see what the ticket is about (per Jen's 5/27 ask).
+ */
+function buildAnnouncementText(args: {
+  jiraKey: string;
+  jiraUrl: string;
+  submitterId: string;
+  title: string;
+  description: string;
+  piType?: string;
+  advertiser?: string;
+  aidAffected?: string;
+  campaignGroupId?: string;
+  muteEmoji: string;
+}): string {
+  const lines: string[] = [];
+  lines.push(`:rocket: *New PI ticket: ${args.jiraKey}* — ${args.jiraUrl}`);
+  lines.push(`Filed by <@${args.submitterId}>`);
+  lines.push(`• *Title:* ${args.title}`);
+
+  // Advertiser line combines advertiser + AID if both are present
+  if (args.advertiser || args.aidAffected) {
+    const parts = [args.advertiser, args.aidAffected ? `AID ${args.aidAffected}` : ""]
+      .filter(Boolean)
+      .join(" — ");
+    lines.push(`• *Advertiser:* ${parts}`);
+  }
+  if (args.campaignGroupId) {
+    lines.push(`• *Campaign Group ID:* ${args.campaignGroupId}`);
+  }
+  if (args.piType) {
+    lines.push(`• *PI Issue Type:* ${args.piType}`);
+  }
+  // Description last; truncate so the post stays scannable.
+  lines.push(`• *Description:* ${truncate(args.description, 400)}`);
+  lines.push("");
+  lines.push(
+    `Reply in this thread to discuss; replies sync to Jira as comments. ` +
+      `React :${args.muteEmoji}: to pause.`,
+  );
+  return lines.join("\n");
+}
 
 export default SlackFunction(CreatePiTicketFunction, async ({ inputs, client, env }) => {
   const cf = config.jiraCustomFields;
@@ -38,7 +89,11 @@ export default SlackFunction(CreatePiTicketFunction, async ({ inputs, client, en
   let submitterName = inputs.submitter_id;
   let submitterEmail: string | undefined;
   try {
-    const u = await client.users.info({ user: inputs.submitter_id });
+    const u = await withTimeout(
+      client.users.info({ user: inputs.submitter_id }),
+      SLACK_TIMEOUTS.usersInfo,
+      "users.info",
+    );
     if (u.ok && u.user) {
       submitterName = u.user.profile?.display_name_normalized ||
         u.user.profile?.real_name_normalized ||
@@ -90,13 +145,7 @@ export default SlackFunction(CreatePiTicketFunction, async ({ inputs, client, en
   if (submitterJiraAccountId) {
     fields.reporter = { accountId: submitterJiraAccountId };
   }
-
-  // All custom fields are now optional from the form. Only set when provided.
-  // PI Issue Type: filer picks Pacing/Performance if known.
-  // PMO Rep is auto-set by Jira automation to Trixy.
-  if (inputs.pi_type) {
-    fields[cf.piIssueType] = [{ value: inputs.pi_type }];
-  }
+  if (inputs.pi_type) fields[cf.piIssueType] = [{ value: inputs.pi_type }];
   if (inputs.advertiser) fields[cf.advertiser] = inputs.advertiser;
   if (inputs.agency) fields[cf.agency] = inputs.agency;
   if (inputs.aid_affected) fields[cf.aidAffected] = inputs.aid_affected;
@@ -107,37 +156,82 @@ export default SlackFunction(CreatePiTicketFunction, async ({ inputs, client, en
   const created = await createIssueWithFields(env, fields);
   const jiraUrl = `${env.JIRA_BASE_URL}/browse/${created.key}`;
 
-  // Post a public announcement in the PI channel and register the thread
-  // for comment-sync so follow-up replies land on the Jira ticket.
+  // Post a rich announcement in the PI channel and register the thread for
+  // comment-sync so follow-up replies land on the Jira ticket. Both calls
+  // are bounded by a timeout so a Slack outage can't hang the workflow.
+  let slackPostStatus = "ok";
   try {
-    const announcement = await client.chat.postMessage({
-      channel: config.piNotificationChannelId,
-      text:
-        `:rocket: New PI ticket: *${created.key}* — ${jiraUrl}\n` +
-        `Filed by <@${inputs.submitter_id}>. Reply in this thread to discuss; ` +
-        `replies sync to Jira as comments. React :${config.muteEmoji}: to pause.`,
+    const announcementText = buildAnnouncementText({
+      jiraKey: created.key,
+      jiraUrl,
+      submitterId: inputs.submitter_id,
+      title: inputs.summary,
+      description: inputs.description,
+      piType: inputs.pi_type,
+      advertiser: inputs.advertiser,
+      aidAffected: inputs.aid_affected,
+      campaignGroupId: inputs.campaign_group_id,
+      muteEmoji: config.muteEmoji,
     });
+    const announcement = await withTimeout(
+      client.chat.postMessage({
+        channel: config.piNotificationChannelId,
+        text: announcementText,
+      }),
+      SLACK_TIMEOUTS.postMessage,
+      "chat.postMessage",
+    );
     if (announcement.ok && announcement.ts) {
-      await client.apps.datastore.put({
-        datastore: ThreadTicketDatastore.name,
-        item: {
-          thread_key: threadKey(config.piNotificationChannelId, announcement.ts),
-          channel_id: config.piNotificationChannelId,
-          thread_ts: announcement.ts,
-          jira_key: created.key,
-          muted: false,
-          created_at: new Date().toISOString(),
-        },
-      });
+      await withTimeout(
+        client.apps.datastore.put({
+          datastore: ThreadTicketDatastore.name,
+          item: {
+            thread_key: threadKey(config.piNotificationChannelId, announcement.ts),
+            channel_id: config.piNotificationChannelId,
+            thread_ts: announcement.ts,
+            jira_key: created.key,
+            muted: false,
+            created_at: new Date().toISOString(),
+          },
+        }),
+        SLACK_TIMEOUTS.datastorePut,
+        "datastore.put",
+      );
+    } else {
+      slackPostStatus = "post_not_ok";
     }
   } catch (e) {
+    slackPostStatus = "timeout_or_error";
     console.error("channel announcement failed", e);
+  }
+
+  // DM the submitter directly with the ticket link. If the channel post
+  // timed out, the DM is the only confirmation they get, so include a note.
+  // Bounded by a timeout so a Slack outage can't hang the workflow further.
+  const dmMessage = slackPostStatus === "ok"
+    ? `Opened *${created.key}*: ${jiraUrl}`
+    : `Opened *${created.key}*: ${jiraUrl}\n` +
+      `:warning: The channel announcement in <#${config.piNotificationChannelId}> ` +
+      `couldn't be posted (Slack may be degraded). Your ticket is created but the ` +
+      `team thread didn't go out. You can manually share the ticket link or retry later.`;
+  try {
+    await withTimeout(
+      client.chat.postMessage({
+        channel: inputs.submitter_id,
+        text: dmMessage,
+      }),
+      SLACK_TIMEOUTS.postMessage,
+      "submitter DM",
+    );
+  } catch (e) {
+    console.error("submitter DM failed", e);
   }
 
   return {
     outputs: {
       jira_key: created.key,
       jira_url: jiraUrl,
+      slack_post_status: slackPostStatus,
     },
   };
 });

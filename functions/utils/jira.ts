@@ -18,21 +18,38 @@ function buildEnv(env: Record<string, string>): JiraEnv {
   };
 }
 
+// Default timeout for Jira HTTP calls. Normal latency is sub-second; anything
+// past 30s means Jira or the network is degraded and we want to fail fast.
+const JIRA_TIMEOUT_MS = 30_000;
+
 async function jiraFetch(
   env: Record<string, string>,
   path: string,
   init: RequestInit = {},
+  timeoutMs: number = JIRA_TIMEOUT_MS,
 ): Promise<Response> {
   const j = buildEnv(env);
-  return await fetch(`${j.baseUrl}${path}`, {
-    ...init,
-    headers: {
-      "Authorization": authHeader(j),
-      "Accept": "application/json",
-      "Content-Type": "application/json",
-      ...(init.headers || {}),
-    },
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(`${j.baseUrl}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        "Authorization": authHeader(j),
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        ...(init.headers || {}),
+      },
+    });
+  } catch (e) {
+    if ((e as Error).name === "AbortError") {
+      throw new Error(`Jira request to ${path} timed out after ${timeoutMs}ms`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Look up a Jira accountId by email. Returns undefined if no match. */

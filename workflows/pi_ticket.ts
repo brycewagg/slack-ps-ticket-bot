@@ -60,7 +60,7 @@ const form = PiTicketWorkflow.addStep(Schema.slack.functions.OpenForm, {
   },
 });
 
-const created = PiTicketWorkflow.addStep(CreatePiTicketFunction, {
+PiTicketWorkflow.addStep(CreatePiTicketFunction, {
   submitter_id: PiTicketWorkflow.inputs.interactivity.interactor.id,
   summary: form.outputs.fields.summary,
   description: form.outputs.fields.description,
@@ -72,8 +72,5 @@ const created = PiTicketWorkflow.addStep(CreatePiTicketFunction, {
   revenue_impact: form.outputs.fields.revenue_impact,
   projected_underspend: form.outputs.fields.projected_underspend,
 });
-
-PiTicketWorkflow.addStep(Schema.slack.functions.SendDm, {
-  user_id: PiTicketWorkflow.inputs.interactivity.interactor.id,
-  message: `Opened *${created.outputs.jira_key}*: ${created.outputs.jira_url}`,
-});
+// Note: the function sends its own DM so it can include degraded-mode
+// messaging if the channel post fails. The SendDm step was removed.

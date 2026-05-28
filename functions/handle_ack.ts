@@ -9,6 +9,7 @@ import {
 import { ThreadTicketDatastore, threadKey } from "../datastores/thread_ticket_map.ts";
 import { parsePi } from "./utils/parse_pi.ts";
 import { buildSlackSourcedDescription } from "./utils/description.ts";
+import { SLACK_TIMEOUTS, withTimeout } from "./utils/timeout.ts";
 
 // Issue type ID for Performance Investigation on PS (validated 2026-05-15)
 const PI_ISSUE_TYPE_ID = "12823";
@@ -54,7 +55,11 @@ async function resolveSlackUser(
   userId: string,
 ): Promise<{ displayName: string; email?: string }> {
   try {
-    const res = await client.users.info({ user: userId });
+    const res = await withTimeout(
+      client.users.info({ user: userId }),
+      SLACK_TIMEOUTS.usersInfo,
+      "users.info",
+    );
     if (res.ok && res.user) {
       const displayName = res.user.profile?.display_name_normalized ||
         res.user.profile?.real_name_normalized ||
@@ -76,7 +81,11 @@ async function resolveChannelName(
   channelId: string,
 ): Promise<string | undefined> {
   try {
-    const res = await client.conversations.info({ channel: channelId });
+    const res = await withTimeout(
+      client.conversations.info({ channel: channelId }),
+      SLACK_TIMEOUTS.conversationsInfo,
+      "conversations.info",
+    );
     if (res.ok && res.channel?.name) return res.channel.name;
   } catch (e) {
     console.error("conversations.info failed", e);
@@ -87,12 +96,16 @@ async function resolveChannelName(
 export default SlackFunction(HandleAckFunction, async ({ inputs, client, env }) => {
   const { channel_id, message_ts, reacting_user_id } = inputs;
 
-  const history = await client.conversations.history({
-    channel: channel_id,
-    latest: message_ts,
-    inclusive: true,
-    limit: 1,
-  });
+  const history = await withTimeout(
+    client.conversations.history({
+      channel: channel_id,
+      latest: message_ts,
+      inclusive: true,
+      limit: 1,
+    }),
+    SLACK_TIMEOUTS.conversationsHistory,
+    "conversations.history",
+  );
   if (!history.ok || !history.messages?.length) {
     console.error("conversations.history failed", history);
     return { outputs: {} };
@@ -101,7 +114,11 @@ export default SlackFunction(HandleAckFunction, async ({ inputs, client, env }) 
   const text: string = message.text ?? "";
 
   const [permalinkRes, reactor, channelName] = await Promise.all([
-    client.chat.getPermalink({ channel: channel_id, message_ts }),
+    withTimeout(
+      client.chat.getPermalink({ channel: channel_id, message_ts }),
+      SLACK_TIMEOUTS.chatGetPermalink,
+      "chat.getPermalink",
+    ),
     resolveSlackUser(client, reacting_user_id),
     resolveChannelName(client, channel_id),
   ]);
@@ -147,13 +164,21 @@ export default SlackFunction(HandleAckFunction, async ({ inputs, client, env }) 
         console.error("addRemoteSlackLink failed", e);
       }
       await recordThreadMapping(client, channel_id, message_ts, key);
-      await client.chat.postMessage({
-        channel: channel_id,
-        thread_ts: message_ts,
-        text:
-          `:link: Linked Slack to existing ticket *${key}*: ${env.JIRA_BASE_URL}/browse/${key}\n` +
-          `Replies in this thread will sync as Jira comments. React :${config.muteEmoji}: to pause.`,
-      });
+      try {
+        await withTimeout(
+          client.chat.postMessage({
+            channel: channel_id,
+            thread_ts: message_ts,
+            text:
+              `:link: Linked Slack to existing ticket *${key}*: ${env.JIRA_BASE_URL}/browse/${key}\n` +
+              `Replies in this thread will sync as Jira comments. React :${config.muteEmoji}: to pause.`,
+          }),
+          SLACK_TIMEOUTS.postMessage,
+          "chat.postMessage (linked)",
+        );
+      } catch (e) {
+        console.error("post linked-ticket reply failed", e);
+      }
       return { outputs: {} };
     }
   }
@@ -205,13 +230,21 @@ export default SlackFunction(HandleAckFunction, async ({ inputs, client, env }) 
       title: channelName ? `Slack message in #${channelName}` : "Slack source message",
     });
     await recordThreadMapping(client, channel_id, message_ts, created.key);
-    await client.chat.postMessage({
-      channel: channel_id,
-      thread_ts: message_ts,
-      text:
-        `:rocket: Opened *${created.key}*: ${env.JIRA_BASE_URL}/browse/${created.key}\n` +
-        `Replies in this thread will sync as Jira comments. React :${config.muteEmoji}: on the thread root to pause.`,
-    });
+    try {
+      await withTimeout(
+        client.chat.postMessage({
+          channel: channel_id,
+          thread_ts: message_ts,
+          text:
+            `:rocket: Opened *${created.key}*: ${env.JIRA_BASE_URL}/browse/${created.key}\n` +
+            `Replies in this thread will sync as Jira comments. React :${config.muteEmoji}: on the thread root to pause.`,
+        }),
+        SLACK_TIMEOUTS.postMessage,
+        "chat.postMessage (new ticket)",
+      );
+    } catch (e) {
+      console.error("post new-ticket reply failed", e);
+    }
   } catch (e) {
     console.error("createIssue failed", e);
     await client.chat.postEphemeral({
