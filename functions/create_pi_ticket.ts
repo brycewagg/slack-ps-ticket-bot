@@ -3,6 +3,7 @@ import { config } from "../config.ts";
 import { createIssueWithFields, findUserAccountIdByEmail } from "./utils/jira.ts";
 import { ThreadTicketDatastore, threadKey } from "../datastores/thread_ticket_map.ts";
 import { SLACK_TIMEOUTS, withTimeout } from "./utils/timeout.ts";
+import { parsePi } from "./utils/parse_pi.ts";
 
 export const CreatePiTicketFunction = DefineFunction({
   callback_id: "create_pi_ticket",
@@ -145,7 +146,15 @@ export default SlackFunction(CreatePiTicketFunction, async ({ inputs, client, en
   if (submitterJiraAccountId) {
     fields.reporter = { accountId: submitterJiraAccountId };
   }
-  if (inputs.pi_type) fields[cf.piIssueType] = [{ value: inputs.pi_type }];
+  // PI Issue Type: prefer the form value; if blank, fall back to the keyword
+  // heuristic so the field doesn't sit empty on tickets the filer didn't
+  // categorize.
+  let resolvedPiType = inputs.pi_type;
+  if (!resolvedPiType) {
+    const piHeuristic = parsePi(`${inputs.summary}\n${inputs.description}`);
+    if (piHeuristic.piIssueType) resolvedPiType = piHeuristic.piIssueType;
+  }
+  if (resolvedPiType) fields[cf.piIssueType] = [{ value: resolvedPiType }];
   if (inputs.advertiser) fields[cf.advertiser] = inputs.advertiser;
   if (inputs.agency) fields[cf.agency] = inputs.agency;
   if (inputs.aid_affected) fields[cf.aidAffected] = inputs.aid_affected;
@@ -167,7 +176,7 @@ export default SlackFunction(CreatePiTicketFunction, async ({ inputs, client, en
       submitterId: inputs.submitter_id,
       title: inputs.summary,
       description: inputs.description,
-      piType: inputs.pi_type,
+      piType: resolvedPiType,
       advertiser: inputs.advertiser,
       aidAffected: inputs.aid_affected,
       campaignGroupId: inputs.campaign_group_id,
