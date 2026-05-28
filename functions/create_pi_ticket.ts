@@ -146,21 +146,28 @@ export default SlackFunction(CreatePiTicketFunction, async ({ inputs, client, en
   if (submitterJiraAccountId) {
     fields.reporter = { accountId: submitterJiraAccountId };
   }
-  // PI Issue Type: prefer the form value; if blank, fall back to the keyword
-  // heuristic so the field doesn't sit empty on tickets the filer didn't
-  // categorize.
-  let resolvedPiType = inputs.pi_type;
-  if (!resolvedPiType) {
-    const piHeuristic = parsePi(`${inputs.summary}\n${inputs.description}`);
-    if (piHeuristic.piIssueType) resolvedPiType = piHeuristic.piIssueType;
-  }
+  // Run the parser once over the form text. Form values win; parser fills
+  // the blanks. Catches the common case where the filer writes a structured
+  // description ("Advertiser: X (NNNN)", "Agency: Y") but leaves the matching
+  // form fields empty. If the description is freeform prose without those
+  // labels, the parser stays quiet and the field remains blank.
+  const piHeuristic = parsePi(`${inputs.summary}\n${inputs.description}`);
+
+  const resolvedPiType = inputs.pi_type || piHeuristic.piIssueType;
+  const resolvedAdvertiser = inputs.advertiser || piHeuristic.advertiser;
+  const resolvedAgency = inputs.agency || piHeuristic.agency;
+  const resolvedAid = inputs.aid_affected || piHeuristic.aidAffected;
+  const resolvedCgid = inputs.campaign_group_id || piHeuristic.campaignGroupId;
+  const resolvedRevenue = inputs.revenue_impact || piHeuristic.monthlyBudget;
+  const resolvedUnderspend = inputs.projected_underspend || piHeuristic.projectedUnderspend;
+
   if (resolvedPiType) fields[cf.piIssueType] = [{ value: resolvedPiType }];
-  if (inputs.advertiser) fields[cf.advertiser] = inputs.advertiser;
-  if (inputs.agency) fields[cf.agency] = inputs.agency;
-  if (inputs.aid_affected) fields[cf.aidAffected] = inputs.aid_affected;
-  if (inputs.campaign_group_id) fields[cf.campaignGroupId] = inputs.campaign_group_id;
-  if (inputs.revenue_impact) fields[cf.revenueImpact] = inputs.revenue_impact;
-  if (inputs.projected_underspend) fields[cf.projectedUnderspend] = inputs.projected_underspend;
+  if (resolvedAdvertiser) fields[cf.advertiser] = resolvedAdvertiser;
+  if (resolvedAgency) fields[cf.agency] = resolvedAgency;
+  if (resolvedAid) fields[cf.aidAffected] = resolvedAid;
+  if (resolvedCgid) fields[cf.campaignGroupId] = resolvedCgid;
+  if (resolvedRevenue) fields[cf.revenueImpact] = resolvedRevenue;
+  if (resolvedUnderspend) fields[cf.projectedUnderspend] = resolvedUnderspend;
 
   const created = await createIssueWithFields(env, fields);
   const jiraUrl = `${env.JIRA_BASE_URL}/browse/${created.key}`;
@@ -177,9 +184,9 @@ export default SlackFunction(CreatePiTicketFunction, async ({ inputs, client, en
       title: inputs.summary,
       description: inputs.description,
       piType: resolvedPiType,
-      advertiser: inputs.advertiser,
-      aidAffected: inputs.aid_affected,
-      campaignGroupId: inputs.campaign_group_id,
+      advertiser: resolvedAdvertiser,
+      aidAffected: resolvedAid,
+      campaignGroupId: resolvedCgid,
       muteEmoji: config.muteEmoji,
     });
     const announcement = await withTimeout(
