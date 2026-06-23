@@ -12,10 +12,6 @@ export const config = {
   //                    Performance Investigation=12823
   ackIssueTypeId: "11222",
 
-  // Issue type used by the /pi-ticket form. Must exist on the PS project.
-  // If PI tickets are a dedicated issue type, name it here. Otherwise leave as Task.
-  piIssueType: "Performance Investigation",
-
   // Default terminal transition for ticket types that don't have an override.
   // Support tickets and most other PS types use "Resolved" (id 781).
   doneTransitionName: "Resolved",
@@ -39,17 +35,11 @@ export const config = {
   channelIds: [
     "C0B4PTZEEC8", // #test-rx (sandbox)
     "C0B1JSHRZSL", // #test-daily-customer-perf (broader team testing)
+    "C05P7BAN370", // #daily-customer-performance (production rollout)
   ],
 
-  // Where the bot posts a public notification after a form-submitted ticket.
-  // Reaction-created tickets get a public reply in their source thread instead.
-  piNotificationChannelId: "C0B1JSHRZSL", // #test-daily-customer-perf
-
-  // Default PMO Rep. Must match a value from pmoRepOptions exactly.
-  defaultPmoRep: "Trixy Tran",
-
-  // Jira custom field IDs for the PI form, validated against PS / Performance Investigation
-  // issue type on 2026-05-15.
+  // Jira custom field IDs set by the :on_it: flow when it detects a PI alert,
+  // validated against PS / Performance Investigation issue type on 2026-05-15.
   jiraCustomFields: {
     piIssueType: "customfield_19899",        // multi-select: Performance, Pacing
     revenueImpact: "customfield_15553",      // text (Jira field name: "Revenue Impact")
@@ -58,35 +48,5 @@ export const config = {
     agency: "customfield_19935",             // text
     aidAffected: "customfield_13720",        // text
     campaignGroupId: "customfield_15631",    // text
-    pmoRep: "customfield_15612",             // single-select, value must match below
   },
-
-  // Allowed PMO Rep values, as defined in Jira (customfield_15612).
-  // Update if Jira admins change the list.
-  pmoRepOptions: [
-    "Al Beretta",
-    "Amanda Miles",
-    "Angela Pace",
-    "Bryce Wagg",
-    "Casey Bond",
-    "Daniella Kubiak",
-    "Elena Donnelly",
-    "Helen Barden",
-    "Jen Wang",
-    "Jason Huertas",
-    "Jessica Crist",
-    "Kaila Griep",
-    "Kaitlin Dickinson",
-    "Luis Chelala",
-    "Meghan Besse",
-    "Michelle Cervantes",
-    "Michelle Helms",
-    "Mike Dolzer",
-    "Paul Reitzin",
-    "Shauna Stannard",
-    "Tasha Schaffels",
-    "Tejas Widjonarko",
-    "Tim Harrison",
-    "Trixy Tran",
-  ],
 };

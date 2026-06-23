@@ -3,12 +3,10 @@ import { AckReactionWorkflow } from "./workflows/ack_reaction.ts";
 import { DoneReactionWorkflow } from "./workflows/done_reaction.ts";
 import { MuteThreadWorkflow } from "./workflows/mute_thread.ts";
 import { SyncThreadCommentWorkflow } from "./workflows/sync_thread_comment.ts";
-import { PiTicketWorkflow } from "./workflows/pi_ticket.ts";
 import { HandleAckFunction } from "./functions/handle_ack.ts";
 import { HandleDoneFunction } from "./functions/handle_done.ts";
 import { MuteThreadFunction } from "./functions/mute_thread.ts";
 import { SyncThreadCommentFunction } from "./functions/sync_thread_comment.ts";
-import { CreatePiTicketFunction } from "./functions/create_pi_ticket.ts";
 import { ThreadTicketDatastore } from "./datastores/thread_ticket_map.ts";
 
 export default Manifest({
@@ -20,19 +18,16 @@ export default Manifest({
     DoneReactionWorkflow,
     MuteThreadWorkflow,
     SyncThreadCommentWorkflow,
-    PiTicketWorkflow,
   ],
   functions: [
     HandleAckFunction,
     HandleDoneFunction,
     MuteThreadFunction,
     SyncThreadCommentFunction,
-    CreatePiTicketFunction,
   ],
   datastores: [ThreadTicketDatastore],
   outgoingDomains: ["mntn.atlassian.net"],
   botScopes: [
-    "commands",
     "chat:write",
     "chat:write.public",
     "channels:history",

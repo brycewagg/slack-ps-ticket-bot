@@ -1,6 +1,6 @@
 # PS Ticket Bot
 
-Slack-hosted app that opens, comments on, and closes Jira PS tickets via reactions and a form.
+Slack-hosted app that opens, comments on, and closes Jira PS tickets via reactions.
 
 ## Flows
 
@@ -20,22 +20,9 @@ Once a thread has a ticket tracked (via `:on_it:`), every subsequent reply in th
 
 Pause with `:mute:` on the thread root.
 
-### PI ticket form (lightning bolt)
-
-A "File PI Ticket" entry in the ⚡ shortcuts menu next to the Slack composer opens a form with:
-
-- Title (required)
-- Description (required)
-- PI Issue Type (multi-select: Performance / Pacing, required)
-- Advertiser (required)
-- Agency
-- AID Affected
-- Campaign Group ID (cgid)
-- Revenue Impact / Monthly Budget (PEM fills if flagging)
-- Projected Underspend (Tof/Johnny fill if flagging)
-- PMO Rep (constrained dropdown, defaults to Trixy Tran)
-
-Assignee is left blank — manual routing for now.
+When `:on_it:` detects a PI alert in the message body, it prose-parses Advertiser, AID,
+Campaign Group, PI Issue Type, and budget figures and sets the matching Jira custom fields
+on the created ticket. No form needed.
 
 ## One-time setup
 
@@ -63,10 +50,9 @@ changes the field config and you need to re-validate.
    slack trigger create --trigger-def triggers/done_reaction.ts
    slack trigger create --trigger-def triggers/mute_reaction.ts
    slack trigger create --trigger-def triggers/message_event.ts
-   slack trigger create --trigger-def triggers/pi_ticket_shortcut.ts
    ```
 
-   When you change watched channels in `config.ts`, re-run `slack trigger update` (or delete + recreate) for the four event-scoped triggers. The shortcut trigger is not channel-scoped.
+   When you change watched channels in `config.ts`, re-run `slack trigger update` (or delete + recreate) for the four event-scoped triggers.
 
 ## Verify before deploying
 
@@ -95,13 +81,11 @@ Logs stream as reactions fire and thread replies sync.
 | `triggers/done_reaction.ts` | `:resolved:` → transition to Done |
 | `triggers/mute_reaction.ts` | `:mute:` → pause sync |
 | `triggers/message_event.ts` | Thread replies → Jira comments |
-| `triggers/pi_ticket_shortcut.ts` | Lightning-bolt shortcut to open the form |
 | `workflows/*.ts` | One-step wrappers around each function |
 | `functions/handle_ack.ts` | ACK handler |
 | `functions/handle_done.ts` | DONE handler |
 | `functions/mute_thread.ts` | Mute handler |
 | `functions/sync_thread_comment.ts` | Thread-reply sync handler |
-| `functions/create_pi_ticket.ts` | Form-submission handler (creates ticket with custom fields) |
 | `functions/utils/jira.ts` | Jira REST v3 client |
 | `scripts/list-fields.sh` | Discover custom field IDs |
 
@@ -110,4 +94,3 @@ Logs stream as reactions fire and thread replies sync.
 - One ticket per message for `:on_it:` and `:resolved:`. Multiple `PS-###` keys → only first is acted on.
 - Thread sync starts only after `:on_it:`. Replies posted before the ticket is opened are not retroactively synced. (Easy to add: read `conversations.replies` on ACK and bulk-comment.)
 - Channel-scoped event triggers only. Add channels to `config.ts` and update triggers to expand coverage.
-- Form leaves assignee blank. Auto-routing (PEM ↔ Tof) is a follow-up — needs a user mapping.
