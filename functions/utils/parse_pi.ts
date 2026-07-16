@@ -65,8 +65,9 @@ export function parsePi(rawText: string): ParsedPi {
 
   // ---- Advertiser name + AID ---------------------------------------------
   // Try multiple labels: Advertiser, Advertiser Name, Brand, Account.
+  // A parenthetical may sit between the label and the colon: "Account (AID):".
   // The regex captures the name and an optional trailing ID in (), () with AID prefix, or after a hyphen.
-  const advLabels = /\b(?:Advertiser(?:\s+Name)?|Brand|Account)\s*:\s*(.+?)\s*$/im;
+  const advLabels = /\b(?:Advertiser(?:\s+Name)?|Brand|Account)(?:\s*\([^)]*\))?\s*:\s*(.+?)\s*$/im;
   const advMatch = firstLineMatch(lines, advLabels);
   if (advMatch) {
     const tail = advMatch[1].trim();
@@ -87,20 +88,32 @@ export function parsePi(rawText: string): ParsedPi {
   }
 
   // ---- Campaign name + CGID ----------------------------------------------
-  // "Campaign:", "Campaign Impacted:", "Campaign Name:"
-  // Also handles quoted campaign names: Campaign "X"
-  const campLabels = /\bCampaign(?:\s+(?:Impacted|Name))?\s*:?\s*(.+?)\s*$/im;
-  const campMatch = firstLineMatch(lines, campLabels);
-  if (campMatch) {
-    let camp = campMatch[1].trim();
+  // "Campaign:", "Campaign Impacted:", "Campaign Name:", "Impacted Campaign(s):",
+  // "Campaigns:". Also handles quoted campaign names: Campaign "X".
+  // When the label line carries no value (e.g. "Impacted Campaign(s):" with the
+  // name on the next sub-bullet), fall through to the following line.
+  const campLabels = /\b(?:Impacted\s+)?Campaigns?(?:\(s\))?(?:\s+(?:Impacted|Name))?\s*:?\s*(.*)$/i;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(campLabels);
+    if (!m) continue;
+    let camp = m[1].trim();
     // Strip surrounding quotes
     camp = camp.replace(/^["'"']/, "").replace(/["'"']$/, "");
+    // No usable value on the label line (empty or leftover punctuation like
+    // "(s):"): take the next non-empty line instead.
+    if (!/[A-Za-z0-9]/.test(camp) && i + 1 < lines.length) {
+      camp = lines[i + 1].trim();
+    }
+    // Strip leading list-bullet characters from sub-bullet lines.
+    camp = camp.replace(/^[•◦▪‣·*\-\s]+/, "");
+    if (!/[A-Za-z0-9]/.test(camp)) break;
     result.campaignName = cleanName(camp);
     const cgidInLine =
       camp.match(/\((\d+)\)/) ||
       camp.match(/[-–]\s*(\d+)\s*$/) ||
       camp.match(/\s+(\d{4,})\s*$/);
     if (cgidInLine) result.campaignGroupId = cgidInLine[1];
+    break;
   }
 
   // Standalone CGID
@@ -122,10 +135,11 @@ export function parsePi(rawText: string): ParsedPi {
   }
 
   // ---- Monthly Budget / Revenue Impact -----------------------------------
-  // Handles: "Monthly Budget: $X", "Monthly budget and/or potential amount of revenue loss: $X"
+  // Handles: "Monthly Budget: $X", "Monthly budget and/or potential amount of
+  // revenue loss: $X", and bare "Revenue: $X".
   const mb = firstLineMatch(
     lines,
-    /\b(?:Monthly\s+(?:budget|Budget)[^:\n]*|Revenue\s+(?:Impact|Loss))\s*:\s*\$?\s*([\d,]+(?:\.\d+)?[KkMm]?)/i,
+    /\b(?:Monthly\s+(?:budget|Budget)[^:\n]*|Revenue(?:\s+(?:Impact|Loss))?)\s*:\s*\$?\s*([\d,]+(?:\.\d+)?[KkMm]?)/i,
   );
   if (mb) {
     result.monthlyBudget = `$${mb[1]}`;
@@ -146,6 +160,8 @@ export function parsePi(rawText: string): ParsedPi {
     /\bunderspend\b/,
     /\bunderspending\b/,
     /\bdeliverab(?:ility|le)\b/,
+    /\bdelivery\b/,
+    /\bbehind\s+schedule\b/,
     /\bbudget\s+(?:underspend|behind)\b/,
     /\b\d+%\s*(?:of\s+)?(?:its\s+)?budget\b/, // "spent only 38% of its budget"
   ];

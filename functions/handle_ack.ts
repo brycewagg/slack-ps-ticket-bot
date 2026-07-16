@@ -205,7 +205,11 @@ export default SlackFunction(HandleAckFunction, async ({ inputs, client, env }) 
   const cf = config.jiraCustomFields;
   const fields: Record<string, unknown> = {
     project: { key: config.projectKey },
-    issuetype: { id: pi.isPiAlert ? PI_ISSUE_TYPE_ID : config.ackIssueTypeId },
+    issuetype: {
+      id: pi.isPiAlert
+        ? PI_ISSUE_TYPE_ID
+        : (config.ackIssueTypeIdByChannel[channel_id] ?? config.ackIssueTypeId),
+    },
     summary,
     description,
   };

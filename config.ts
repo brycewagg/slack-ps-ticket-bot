@@ -12,6 +12,14 @@ export const config = {
   //                    Performance Investigation=12823
   ackIssueTypeId: "11222",
 
+  // Per-channel override for the non-PI fallback. #daily-customer-performance
+  // is a PI-only channel, so tickets raised there stay Performance
+  // Investigation even when the message format defeats the PI parser
+  // (PS-8486, 2026-07-16). Test channels keep the Support fallback.
+  ackIssueTypeIdByChannel: {
+    "C05P7BAN370": "12823", // #daily-customer-performance
+  } as Record<string, string>,
+
   // Default terminal transition for ticket types that don't have an override.
   // Support tickets and most other PS types use "Resolved" (id 781).
   doneTransitionName: "Resolved",
