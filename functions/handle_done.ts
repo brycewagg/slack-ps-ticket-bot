@@ -95,7 +95,7 @@ export default SlackFunction(HandleDoneFunction, async ({ inputs, client, env })
           user: reacting_user_id,
           text:
             `No ticket found for this message or thread. ` +
-            `Make sure the original message was opened with :${config.ackEmoji}:, ` +
+            `Make sure the original message was opened with ${config.ackEmojis.map((e) => `:${e}:`).join(" or ")}, ` +
             `or include a PS-### key in the message body.`,
         }),
         SLACK_TIMEOUTS.postEphemeral,

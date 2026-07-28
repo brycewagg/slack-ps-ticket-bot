@@ -8,7 +8,7 @@ Slack-hosted app that opens, comments on, and closes Jira PS tickets via reactio
 
 | Reaction | Effect |
 |---|---|
-| `:on_it:` on any message | Creates a `PS-###` ticket. If the message already contains a `PS-###` key, skips creation, attaches the Slack permalink to the existing issue as a remote link, and DMs an ephemeral note to the reactor. Records a thread → ticket mapping in the app datastore. |
+| `:on_it:` or `:white_check_mark:` on any message | Creates a `PS-###` ticket. If the message already contains a `PS-###` key, skips creation, attaches the Slack permalink to the existing issue as a remote link, and DMs an ephemeral note to the reactor. Records a thread → ticket mapping in the app datastore. Trigger emojis are configured in `config.ackEmojis`. |
 | `:resolved:` on any message containing a `PS-###` key | Transitions that ticket to Done. |
 | `:mute:` on any tracked thread | Pauses thread-to-Jira comment sync for that thread. |
 
@@ -77,7 +77,7 @@ Logs stream as reactions fire and thread replies sync.
 | `manifest.ts` | App, scopes, workflows, functions, datastore |
 | `config.ts` | Project key, emoji names, custom field IDs, watched channels |
 | `datastores/thread_ticket_map.ts` | Thread → ticket mapping, mute flag |
-| `triggers/ack_reaction.ts` | `:on_it:` → open or link ticket |
+| `triggers/ack_reaction.ts` | `:on_it:` / `:white_check_mark:` → open or link ticket |
 | `triggers/done_reaction.ts` | `:resolved:` → transition to Done |
 | `triggers/mute_reaction.ts` | `:mute:` → pause sync |
 | `triggers/message_event.ts` | Thread replies → Jira comments |

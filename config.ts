@@ -30,8 +30,12 @@ export const config = {
     "12823": "Done", // Performance Investigation
   } as Record<string, string>,
 
-  // Emoji names (no colons) that trigger each action
+  // Emoji names (no colons) that trigger each action.
+  // ackEmojis: any of these opens/links a ticket. :white_check_mark: was added
+  // 2026-07-28 per Jen (Tof finds it easier to reach than :on_it:).
+  // ackEmoji stays the canonical one used in user-facing copy.
   ackEmoji: "on_it",
+  ackEmojis: ["on_it", "white_check_mark"],
   doneEmoji: "resolved",
   muteEmoji: "mute",
 

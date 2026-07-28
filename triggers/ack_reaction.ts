@@ -6,7 +6,7 @@ import { config } from "../config.ts";
 const trigger: Trigger<typeof AckReactionWorkflow.definition> = {
   type: TriggerTypes.Event,
   name: "ACK reaction added",
-  description: "Fires when :on_it: is added to a message in a watched channel",
+  description: `Fires when any of ${config.ackEmojis.map((e) => `:${e}:`).join(", ")} is added to a message in a watched channel`,
   workflow: `#/workflows/${AckReactionWorkflow.definition.callback_id}`,
   event: {
     event_type: TriggerEventTypes.ReactionAdded,
@@ -14,7 +14,10 @@ const trigger: Trigger<typeof AckReactionWorkflow.definition> = {
     filter: {
       version: 1,
       root: {
-        statement: `{{data.reaction}} == '${config.ackEmoji}'`,
+        operator: "OR",
+        inputs: config.ackEmojis.map((emoji) => ({
+          statement: `{{data.reaction}} == '${emoji}'`,
+        })),
       },
     },
   },
