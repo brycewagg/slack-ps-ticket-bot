@@ -39,6 +39,24 @@ export const config = {
   doneEmoji: "resolved",
   muteEmoji: "mute",
 
+  // :eyes: route — Data Monitoring (DM) "Analysis" tickets for Pratik's team.
+  // Added 2026-11-19 per Jen (jwang). Deliberately separate from the PS ack
+  // flow: different project + issue type, auto-assigned, and NO thread-sync.
+  // The ticket captures the triggering message as the issue ("main issue
+  // points"); it does NOT record a thread mapping, so replies are not mirrored
+  // into Jira comments (Jen: "No need for all the slack threads to be in JIRA
+  // comments"). Model ticket: DM-4518 (Analysis, assigned to Pratik).
+  analysisEmoji: "eyes",
+  analysisRoute: {
+    projectKey: "DM", // Data Monitoring (project id 16338)
+    issueTypeId: "10700", // "Analysis" (verified via createmeta 2026-11-19)
+    // Pratik Panchigar (pratik@mountain.com). Hardcoded accountId is more
+    // reliable than a name/email lookup for the auto-assign requirement.
+    assigneeAccountId: "61b6d3ff599f18006a256aef",
+    // Existing DM key in the message body → link instead of creating a dupe.
+    ticketKeyRegex: /\bDM-\d+\b/i,
+  },
+
   // Regex to find an existing ticket key in a message body (case-insensitive)
   ticketKeyRegex: /\bPS-\d+\b/i,
 
@@ -53,12 +71,12 @@ export const config = {
   // Jira custom field IDs set by the :on_it: flow when it detects a PI alert,
   // validated against PS / Performance Investigation issue type on 2026-05-15.
   jiraCustomFields: {
-    piIssueType: "customfield_19899",        // multi-select: Performance, Pacing
-    revenueImpact: "customfield_15553",      // text (Jira field name: "Revenue Impact")
-    projectedUnderspend: "customfield_19901",// text
-    advertiser: "customfield_19934",         // text
-    agency: "customfield_19935",             // text
-    aidAffected: "customfield_13720",        // text
-    campaignGroupId: "customfield_15631",    // text
+    piIssueType: "customfield_19899", // multi-select: Performance, Pacing
+    revenueImpact: "customfield_15553", // text (Jira field name: "Revenue Impact")
+    projectedUnderspend: "customfield_19901", // text
+    advertiser: "customfield_19934", // text
+    agency: "customfield_19935", // text
+    aidAffected: "customfield_13720", // text
+    campaignGroupId: "customfield_15631", // text
   },
 };

@@ -62,7 +62,9 @@ export async function findUserAccountIdByEmail(
     `/rest/api/3/user/search?query=${encodeURIComponent(email)}`,
   );
   if (!res.ok) return undefined;
-  const users = await res.json() as Array<{ accountId: string; emailAddress?: string }>;
+  const users = await res.json() as Array<
+    { accountId: string; emailAddress?: string }
+  >;
   // Prefer exact email match; fall back to first result if none match exactly.
   const exact = users.find((u) =>
     u.emailAddress && u.emailAddress.toLowerCase() === email.toLowerCase()
@@ -91,7 +93,12 @@ export async function getIssueTypeId(
 
 export async function createIssue(
   env: Record<string, string>,
-  args: { projectKey: string; issueTypeId: string; summary: string; descriptionText: string },
+  args: {
+    projectKey: string;
+    issueTypeId: string;
+    summary: string;
+    descriptionText: string;
+  },
 ): Promise<{ key: string; id: string }> {
   const body = {
     fields: {
@@ -113,7 +120,9 @@ export async function createIssue(
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(`Jira createIssue failed (${res.status}): ${await res.text()}`);
+    throw new Error(
+      `Jira createIssue failed (${res.status}): ${await res.text()}`,
+    );
   }
   return await res.json();
 }
@@ -135,7 +144,9 @@ export async function addRemoteSlackLink(
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(`Jira addRemoteLink failed (${res.status}): ${await res.text()}`);
+    throw new Error(
+      `Jira addRemoteLink failed (${res.status}): ${await res.text()}`,
+    );
   }
 }
 
@@ -159,8 +170,34 @@ export async function addComment(
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(`Jira addComment failed (${res.status}): ${await res.text()}`);
+    throw new Error(
+      `Jira addComment failed (${res.status}): ${await res.text()}`,
+    );
   }
+}
+
+/**
+ * Assign an issue to a user by accountId, as a separate call from create.
+ * Kept separate so a missing "Assign Issues" permission fails only the
+ * assignment (the ticket still gets created) instead of 400-ing the whole
+ * create. Returns false on failure; the caller decides how to surface it.
+ */
+export async function assignIssue(
+  env: Record<string, string>,
+  key: string,
+  accountId: string,
+): Promise<{ assigned: boolean; reason?: string }> {
+  const res = await jiraFetch(env, `/rest/api/3/issue/${key}/assignee`, {
+    method: "PUT",
+    body: JSON.stringify({ accountId }),
+  });
+  if (!res.ok) {
+    return {
+      assigned: false,
+      reason: `assignee PUT failed (${res.status}): ${await res.text()}`,
+    };
+  }
+  return { assigned: true };
 }
 
 export async function createIssueWithFields(
@@ -172,7 +209,9 @@ export async function createIssueWithFields(
     body: JSON.stringify({ fields }),
   });
   if (!res.ok) {
-    throw new Error(`Jira createIssueWithFields failed (${res.status}): ${await res.text()}`);
+    throw new Error(
+      `Jira createIssueWithFields failed (${res.status}): ${await res.text()}`,
+    );
   }
   return await res.json();
 }
@@ -193,13 +232,13 @@ export async function transitionIssue(
   // transitions like "Resolve Issue" that share a destination status). Only
   // fall back to destination-status match if the name match misses.
   const want = transitionName.toLowerCase();
-  const match =
-    transitions.find((t) => t.name.toLowerCase() === want) ??
+  const match = transitions.find((t) => t.name.toLowerCase() === want) ??
     transitions.find((t) => t.to.name.toLowerCase() === want);
   if (!match) {
     return {
       transitioned: false,
-      reason: `no transition named "${transitionName}" available from current status`,
+      reason:
+        `no transition named "${transitionName}" available from current status`,
     };
   }
   const doRes = await jiraFetch(env, `/rest/api/3/issue/${key}/transitions`, {
@@ -207,7 +246,10 @@ export async function transitionIssue(
     body: JSON.stringify({ transition: { id: match.id } }),
   });
   if (!doRes.ok) {
-    return { transitioned: false, reason: `transition POST failed (${doRes.status})` };
+    return {
+      transitioned: false,
+      reason: `transition POST failed (${doRes.status})`,
+    };
   }
   return { transitioned: true };
 }
